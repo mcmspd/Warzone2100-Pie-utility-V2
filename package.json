@@ -1,0 +1,21 @@
+{
+  "name": "warzone2100-pie-utility",
+  "version": "1.0.0",
+  "description": "Warzone 2100 PIE 3D Engine & UV Inspector",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "build": "node -e \"console.log('Build complete')\"",
+    "lint": "tsc --noEmit",
+    "start": "node server.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

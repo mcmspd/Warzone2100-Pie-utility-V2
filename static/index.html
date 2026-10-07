@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warzone 2100 PIE 3D Engine & UV Inspector</title>
+  <meta name="description" content="Interactive 3D inspection engine for Warzone 2100 PIE model files with syntax highlighting, 3D WebGL viewport, and UV map inspector.">
+  <meta property="og:title" content="Warzone 2100 PIE 3D Engine & UV Inspector">
+  <meta property="og:description" content="Interactive 3D inspection engine for Warzone 2100 PIE model files with syntax highlighting, 3D WebGL viewport, and UV map inspector.">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Local Three.js and OrbitControls -->
+  <script src="libs/three.min.js"></script>
+  <script src="libs/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="app-container">
+    <!-- Header -->
+    <header id="app-header">
+      <div class="brand">
+        <div class="brand-icon">WZ</div>
+        <div class="brand-title">
+          <span>PIE 3D Engine & Inspector</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="btn-group mode-toggle-group" role="group" aria-label="Inspection & Edit Mode">
+          <button id="btn-mode-faces" class="btn active" title="Faces Mode: Highlight polygon faces, PIE polygon lines, and UV regions">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 22 22 22"></polygon></svg>
+            Faces Mode
+          </button>
+          <button id="btn-mode-vertices" class="btn" title="Vertices Mode: Highlight vertices, PIE points lines, and UV coordinates">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"></circle></svg>
+            Vertices Mode
+          </button>
+          <button id="btn-mode-create-poly" class="btn" title="Create Polygon Mode: Select 3 points in 3D viewport to create a new polygon face">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 22 22 22"></polygon><line x1="12" y1="9" x2="12" y2="15"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>
+            Create Poly
+          </button>
+          <button id="btn-mode-create-point" class="btn" title="Create Points Mode: Click on 3D grid plane to place new vertices snapped to the grid">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.5"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
+            Create Points
+          </button>
+        </div>
+
+        <div class="btn-group">
+          <button id="btn-open-pie" class="btn" title="Open local PIE file">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+            Load PIE
+          </button>
+          <button id="btn-open-ref-modal" class="btn btn-ref-toggle" title="Load a secondary PIE model semi-transparently as a visual reference (View Only, No Edit)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            <span>Ref PIE</span>
+            <span id="badge-ref-active" class="badge-ref-active" style="display:none;">ON</span>
+          </button>
+          <button id="btn-open-tex" class="btn" title="Open custom texture image (PNG)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+            Load Texture
+          </button>
+          <button id="btn-fix-winding" class="btn" title="Fix polygon winding (swaps 2nd/3rd vertices & UVs for inward normals) to ensure outward-facing normals for game back-face culling">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Fix Winding
+          </button>
+        </div>
+      </div>
+
+      <div class="model-meta-badges">
+        <div class="meta-chip">ITEM: <span id="meta-item-name">Heavy Cannon Fortress</span></div>
+        <div class="meta-chip">VER: <span id="meta-version">-</span></div>
+        <div class="meta-chip">POLYS: <span id="meta-polys">-</span></div>
+        <div class="meta-chip">VERTS: <span id="meta-points">-</span></div>
+        <div class="meta-chip">CONNS: <span id="meta-connectors">-</span></div>
+      </div>
+    </header>
+
+    <!-- Repository Model & Tileset Selection Bar -->
+    <div id="model-tileset-bar">
+      <!-- Left: Repository Model Browser -->
+      <div class="bar-section model-section">
+        <div class="bar-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          <span>Model:</span>
+        </div>
+
+        <!-- Search input for finding PIE by structure name, weapon name, or filename -->
+        <div class="search-box-container">
+          <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <input type="text" id="model-search-input" class="model-search-input" placeholder="Search structure name or PIE (e.g. bunker, factory, hover, blbhq)..." title="Search by structure name, weapon, propulsion, or PIE filename (Hotkey: / or Ctrl+F)" autocomplete="off">
+          <button id="btn-clear-model-search" class="btn-clear-search" style="display:none;" title="Clear search">×</button>
+          
+          <!-- Autocomplete Suggestions Dropdown -->
+          <div id="model-search-suggestions" class="search-suggestions-dropdown" style="display:none;"></div>
+        </div>
+
+        <div class="select-wrapper">
+          <select id="model-select" class="model-select" title="Select any Warzone 2100 model from the official repository">
+            <option value="">Loading repository models...</option>
+          </select>
+        </div>
+
+        <span id="model-count-badge" class="model-count-badge" title="Matching models count">873 models</span>
+
+        <span id="model-item-tag" class="in-game-item-tag tag-structure" title="Corresponding structure/weapon/propulsion from Warzone 2100 stats">
+          [Structure] Heavy Cannon Fortress
+        </span>
+      </div>
+
+      <div class="bar-divider"></div>
+
+      <!-- Right: PIE Tileset & Texture Browser -->
+      <div class="bar-section tileset-section">
+        <div class="bar-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+          <span>Tileset / Texture:</span>
+        </div>
+
+        <!-- Quick Switcher for multi-tileset PIEs (e.g. TEXTURE 0 Arizona, TEXTURE 1 Urban, TEXTURE 2 Rockies) -->
+        <div id="tileset-variant-buttons" class="btn-group tileset-variants-group" style="display:none;" title="Tileset variants specified in this PIE file"></div>
+
+        <div class="select-wrapper">
+          <select id="tileset-select" class="tileset-select" title="Select tileset / texture page for current model">
+            <option value="">Loading tilesets...</option>
+          </select>
+        </div>
+
+        <span id="tileset-match-badge" class="badge-tileset-match" title="Indicates whether texture matches the PIE file specification">
+          ✓ PIE Specified
+        </span>
+
+        <button id="btn-apply-tileset-to-pie" class="btn btn-sm btn-primary" style="display:none;" title="Update PIE code TEXTURE directive with this selected tileset">
+          Apply to PIE
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Split Layout -->
+    <div id="main-split">
+      <!-- Left Pane: PIE Text File View & Saved UV Values Box -->
+      <section id="left-pane">
+        <!-- PIE Code Section (Top) -->
+        <div id="pie-code-box">
+          <div class="pane-header">
+            <div class="pane-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              <span id="text-filename">stwpfcan.pie</span>
+              <span id="pane-item-tag" class="in-game-item-tag tag-structure" title="Corresponding in-game item from Warzone 2100 stats">[Structure] Heavy Cannon Fortress</span>
+            </div>
+            <div class="pane-actions">
+              <button id="btn-toggle-edit" class="btn btn-sm" title="Toggle between syntax inspection and text editing">Edit</button>
+              <button id="btn-apply-text" class="btn btn-sm btn-primary" style="display:none;" title="Recompile PIE text into 3D model">Apply Changes</button>
+              <button id="btn-copy-text" class="btn btn-sm" title="Copy PIE contents to clipboard">Copy</button>
+            </div>
+          </div>
+
+          <div class="pane-body">
+            <div id="text-viewer-container"></div>
+            <textarea id="text-editor" spellcheck="false" placeholder="Enter PIE code here..."></textarea>
+          </div>
+        </div>
+
+        <!-- Horizontal Resizer within Left Pane for Saved UVs -->
+        <div id="gutter-saved-uv" class="gutter-saved-uv" title="Drag to resize code viewer and saved UV values box"></div>
+
+        <!-- Saved UV Values Box (Bottom) -->
+        <div id="saved-uv-box">
+          <div class="pane-header saved-uv-header">
+            <div class="pane-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+              <span>Saved UV Values</span>
+              <span id="saved-uv-count" class="badge-count">0</span>
+            </div>
+            <div class="pane-actions">
+              <button id="btn-save-uv-pinned" class="btn btn-sm btn-primary" title="Save UV coordinates from currently pinned face">&#xFF0B; Save from Pinned</button>
+              <button id="btn-clear-saved-uvs" class="btn btn-sm" title="Clear all saved UV presets">Clear All</button>
+            </div>
+          </div>
+          <div id="saved-uv-list" class="saved-uv-list">
+            <!-- Dynamically populated or empty message -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Horizontal Divider -->
+      <div id="gutter-h" class="gutter-h" title="Drag to resize panels"></div>
+
+      <!-- Right Pane: 3D Viewport (Top) + Tileset (Bottom) -->
+      <section id="right-pane">
+        <!-- 3D Viewport -->
+        <div id="viewport-box">
+          <div class="pane-header">
+            <div class="pane-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <span>3D Viewport (WebGL)</span>
+            </div>
+            <div class="pane-actions">
+              <span id="viewport-stats" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Hover or click any face</span>
+              <div class="viewport-grid-controls">
+                <label class="toggle-label" title="Toggle ground coordinate grid">
+                  <input type="checkbox" id="chk-show-grid" checked> Grid:
+                </label>
+                <select id="sel-grid-size" class="grid-size-select" title="Ground grid box size in coordinate units">
+                  <option value="4">4 u (Ultra-Fine)</option>
+                  <option value="8">8 u (Fine)</option>
+                  <option value="16" selected>16 u (Default)</option>
+                  <option value="32">32 u (Medium)</option>
+                  <option value="64">64 u (0.5 Tile)</option>
+                  <option value="128">128 u (1 Tile)</option>
+                  <option value="256">256 u (2×2 Tiles)</option>
+                  <option value="custom">Custom...</option>
+                </select>
+                <input type="number" id="input-custom-grid" class="grid-custom-input" min="1" max="1024" value="16" style="display:none;" title="Enter custom grid box size in coordinate units">
+                <span id="grid-box-badge" class="grid-box-badge" title="Coordinate distance of 1 grid box">16×16u</span>
+
+                <div class="grid-divider"></div>
+
+                <div class="grid-y-control" title="Shift grid elevation along the Y axis (scroll wheel, step, or type)">
+                  <span class="grid-y-label">Y:</span>
+                  <button id="btn-grid-y-down" class="btn-grid-step" title="Shift grid down (-8u, Shift for -1u, Alt for -16u)">▼</button>
+                  <input type="number" id="input-grid-y" class="grid-y-input" value="0" step="1" title="Grid Y elevation (type or scroll)">
+                  <button id="btn-grid-y-up" class="btn-grid-step" title="Shift grid up (+8u, Shift for +1u, Alt for +16u)">▲</button>
+                  <button id="btn-grid-y-reset" class="btn-grid-step btn-grid-reset" title="Reset grid elevation to ground (Y = 0)">0</button>
+                  <button id="btn-grid-y-snap" class="btn-grid-step btn-grid-snap" title="Snap grid Y to elevation of selected vertex or face">Snap</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="threejs-canvas-container">
+            <!-- Floating Create Polygon Helper Banner -->
+            <div id="create-poly-bar" class="create-poly-bar" style="display:none;">
+              <div class="create-poly-header">
+                <span class="create-poly-badge">Create Polygon Mode</span>
+                <span id="create-poly-step" class="create-poly-step">Click 3 points on the 3D model to create a face (0/3)</span>
+              </div>
+              <div class="create-poly-chips">
+                <div class="pt-chip chip-blue" id="chip-pt1"><span class="hud-dot dot-blue"></span> Pt 1: <strong id="chip-pt1-val">None</strong></div>
+                <div class="pt-chip chip-green" id="chip-pt2"><span class="hud-dot dot-green"></span> Pt 2: <strong id="chip-pt2-val">None</strong></div>
+                <div class="pt-chip chip-red" id="chip-pt3"><span class="hud-dot dot-red"></span> Pt 3: <strong id="chip-pt3-val">None</strong></div>
+              </div>
+              <div class="create-poly-actions">
+                <button id="btn-reset-create-poly" class="btn btn-sm" title="Clear selected points (Esc)">Reset</button>
+                <button id="btn-exit-create-poly" class="btn btn-sm btn-primary" title="Exit Create Polygon mode">Done</button>
+              </div>
+            </div>
+
+            <!-- Floating Create Points Helper Banner -->
+            <div id="create-point-bar" class="create-poly-bar" style="display:none;">
+              <div class="create-poly-header">
+                <span class="create-poly-badge" style="background: rgba(14, 165, 233, 0.25); color: var(--accent-cyan); border-color: rgba(56, 189, 248, 0.5);">Create Points Mode</span>
+                <span id="create-point-step" class="create-poly-step">Click on 3D grid plane to place vertices snapped to the grid</span>
+              </div>
+              <div class="create-poly-chips">
+                <div class="pt-chip chip-blue" id="chip-point-preview"><span class="hud-dot dot-blue"></span> Target: <strong id="chip-point-coords">X: 0, Y: 0, Z: 0</strong></div>
+                <div class="pt-chip" id="chip-point-grid"><span class="hud-dot" style="background:#ffcc00;"></span> Snap: <strong id="chip-point-snap">16u Grid (Y: 0)</strong></div>
+              </div>
+              <div class="create-poly-actions">
+                <button id="btn-exit-create-point" class="btn btn-sm btn-primary" title="Exit Create Points mode">Done</button>
+              </div>
+            </div>
+
+            <!-- Floating Secondary Visual Reference Model HUD (View-Only) -->
+            <div id="ref-model-hud" class="ref-model-hud" style="display:none;">
+              <div class="ref-hud-header">
+                <div class="ref-hud-title">
+                  <span class="ref-ghost-icon">👻</span>
+                  <div class="ref-title-info">
+                    <span class="ref-title-label">Reference PIE</span>
+                    <strong id="ref-hud-name" class="ref-hud-filename" title="Reference Model">None</strong>
+                  </div>
+                  <span class="ref-badge-viewonly">View Only</span>
+                </div>
+                <div class="ref-hud-actions">
+                  <button id="btn-ref-toggle-visible" class="btn-ref-icon" title="Toggle visibility of visual reference model">
+                    <svg id="ref-icon-eye-on" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <svg id="ref-icon-eye-off" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                  </button>
+                  <button id="btn-ref-change-model" class="btn-ref-pill" title="Change or pick a different reference model">Change</button>
+                  <button id="btn-ref-clear" class="btn-ref-icon btn-ref-close" title="Remove reference model">✕</button>
+                </div>
+              </div>
+              <div class="ref-hud-body">
+                <div class="ref-control-row">
+                  <div class="ref-control-label">
+                    <span>Opacity:</span>
+                    <span id="ref-opacity-val" class="ref-val-badge">45%</span>
+                  </div>
+                  <input type="range" id="slider-ref-opacity" min="5" max="100" value="45" class="ref-opacity-range" title="Adjust reference model transparency">
+                </div>
+                <div class="ref-control-row">
+                  <div class="ref-control-label"><span>Shading:</span></div>
+                  <select id="sel-ref-shading" class="ref-select" title="Choose shading tint for reference model">
+                    <option value="textured" selected>🎨 Textured (Translucent)</option>
+                    <option value="cyan">🔷 Cyan Ghost Hologram</option>
+                    <option value="purple">🔮 Violet Ghost</option>
+                    <option value="green">🟢 Matrix Green</option>
+                    <option value="white">⚪ Solid White</option>
+                    <option value="wireframe">🕸️ Wireframe Only</option>
+                  </select>
+                </div>
+                <div class="ref-control-row ref-offset-row">
+                  <div class="ref-offset-header">
+                    <span class="ref-control-label">Offset (X, Y, Z):</span>
+                    <div class="ref-offset-btns">
+                      <button id="btn-ref-reset-offset" class="btn-ref-tiny" title="Reset offset to (0, 0, 0)">Reset</button>
+                      <button id="btn-ref-snap-conn" class="btn-ref-tiny btn-ref-accent" title="Snap/align reference model to primary model's connector">Snap Conn</button>
+                    </div>
+                  </div>
+                  <div class="ref-coord-inputs">
+                    <div class="ref-input-cell"><span class="axis-x">X</span><input type="number" id="input-ref-off-x" value="0" step="1"></div>
+                    <div class="ref-input-cell"><span class="axis-y">Y</span><input type="number" id="input-ref-off-y" value="0" step="1"></div>
+                    <div class="ref-input-cell"><span class="axis-z">Z</span><input type="number" id="input-ref-off-z" value="0" step="1"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Three.js Canvas appended here -->
+          </div>
+        </div>
+
+        <!-- Vertical Divider -->
+        <div id="gutter-v" class="gutter-v" title="Drag to resize viewport and tileset"></div>
+
+        <!-- Tileset Image & UV Map -->
+        <div id="tileset-box">
+          <div class="pane-header">
+            <div class="pane-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+              <span>Tileset Texture & UV Map: </span>
+              <span id="tex-filename" style="color: var(--accent-cyan); font-weight: normal;">page-12-player-buildings.png</span>
+            </div>
+            <div class="pane-actions">
+              <label class="toggle-label" title="Show faint wireframe outlines for all polygons">
+                <input type="checkbox" id="chk-show-all-uvs"> All UVs
+              </label>
+              <label class="toggle-label" title="Smoothly pan tileset to hovered UV polygon">
+                <input type="checkbox" id="chk-auto-center-uv" checked> Auto-Center UV
+              </label>
+              <div class="btn-group" style="margin-left: 8px;">
+                <button id="btn-zoom-in" class="btn" title="Zoom in tileset">+</button>
+                <button id="btn-zoom-out" class="btn" title="Zoom out tileset">-</button>
+                <button id="btn-zoom-fit" class="btn" title="Fit tileset in view">Fit</button>
+                <button id="btn-zoom-100" class="btn" title="100% (1:1 pixel scale)">1:1</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- UV Direct Edit Toolbar (visible in Edit UV mode or when UV editing is active) -->
+          <div id="uv-edit-toolbar" class="uv-edit-toolbar" style="display:none;">
+            <div class="uv-toolbar-left">
+              <span class="uv-edit-badge">&#x270E; UV Editor</span>
+              <span id="uv-editing-poly-badge" class="uv-editing-poly-badge">Select a polygon to edit UVs</span>
+              <label class="toggle-label" title="Snap dragged UV coordinates to whole integer pixels">
+                <input type="checkbox" id="chk-snap-pixels" checked> Snap Pixels
+              </label>
+            </div>
+            <div class="btn-group uv-quick-actions">
+              <button id="btn-uv-save-preset" class="btn btn-sm btn-primary" title="Save this face's UV values to the Saved UV library">&#x1F4BE; Save UV</button>
+              <button id="btn-uv-flip-h" class="btn btn-sm" title="Flip UV horizontally for active polygon">&#x21C4; Flip H</button>
+              <button id="btn-uv-flip-v" class="btn btn-sm" title="Flip UV vertically for active polygon">&#x21C5; Flip V</button>
+              <button id="btn-uv-rot-cw" class="btn btn-sm" title="Rotate UV 90 degrees clockwise">&#x21BB; Rotate 90&deg;</button>
+              <button id="btn-uv-reset" class="btn btn-sm" title="Reset UV triangle to center box">Reset UV</button>
+            </div>
+          </div>
+
+          <div id="tileset-canvas-container">
+            <canvas id="tileset-canvas"></canvas>
+          </div>
+
+          <div class="pane-footer">
+            <div class="status-left">
+              <span id="tex-cursor-pos">Pixel: (---, ---)</span>
+              <span id="tex-cursor-uv">UV: (---, ---)</span>
+              <span id="tex-zoom-stat">Zoom: 100%</span>
+            </div>
+            <div class="status-right">
+              <span id="tex-hover-info">Hovered: <span class="highlight">None</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="file-input-pie" accept=".pie,.txt">
+    <input type="file" id="file-input-ref-pie" accept=".pie,.txt">
+    <input type="file" id="file-input-tex" accept="image/png,image/jpeg,image/webp">
+
+    <!-- Reference Model Selection Modal -->
+    <div id="ref-modal" class="modal-overlay" style="display:none;">
+      <div class="modal-card modal-card-ref">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span style="font-size:16px;">👻</span>
+            <span>Load Secondary PIE Reference Model</span>
+            <span class="ref-badge-viewonly" style="margin-left: 6px;">View Only • Visual Alignment</span>
+          </div>
+          <button id="btn-close-ref-modal" class="btn-close-modal" title="Close modal">×</button>
+        </div>
+        <div class="modal-body modal-body-ref">
+          <p class="modal-desc">
+            Load a secondary PIE model rendered semi-transparently alongside your active model for visual scale, alignment, turret fitting, and chassis sizing. <em>(Does not edit or modify the reference model).</em>
+          </p>
+
+          <!-- Search & Select from Repository -->
+          <div class="ref-modal-section">
+            <label class="ref-section-label">1. Choose from Warzone 2100 Repository Models:</label>
+            <div class="search-box-container" style="margin-bottom: 8px;">
+              <svg class="search-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="ref-search-input" class="model-search-input" placeholder="Search reference model (e.g. viper, tracks, heavy cannon, tower)..." autocomplete="off">
+              <button id="btn-clear-ref-search" class="btn-clear-search" style="display:none;" title="Clear search">×</button>
+              <div id="ref-search-suggestions" class="search-suggestions-dropdown" style="display:none;"></div>
+            </div>
+
+            <div class="select-wrapper" style="width: 100%; margin-bottom: 12px;">
+              <select id="ref-model-select" class="model-select" style="max-width: 100%; width: 100%;">
+                <option value="">Select a repository reference model...</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Quick Popular Presets Chips -->
+          <div class="ref-modal-section">
+            <label class="ref-section-label">2. Popular Reference Alignment Presets:</label>
+            <div class="quick-chips-grid">
+              <button class="ref-quick-chip" data-path="data/base/components/bodies/drhbod09.pie" data-name="Viper Body">🤖 Viper Body (Heavy)</button>
+              <button class="ref-quick-chip" data-path="data/base/components/bodies/drlbod01.pie" data-name="Viper Light Body">🤖 Viper Light Body</button>
+              <button class="ref-quick-chip" data-path="data/base/components/prop/prhtrk3.pie" data-name="Half-Tracks">⚙️ Heavy Half-Tracks</button>
+              <button class="ref-quick-chip" data-path="data/base/components/prop/prhwhl1.pie" data-name="Wheels">⚙️ Heavy Wheels</button>
+              <button class="ref-quick-chip" data-path="data/base/components/prop/prhhov1.pie" data-name="Hover Propulsion">⚙️ Hover Propulsion</button>
+              <button class="ref-quick-chip" data-path="data/base/components/weapons/gnhcan.pie" data-name="Heavy Cannon">⚔️ Heavy Cannon Turret</button>
+              <button class="ref-quick-chip" data-path="data/base/components/weapons/gnlmg1.pie" data-name="Machinegun Turret">⚔️ Light MG Turret</button>
+              <button class="ref-quick-chip" data-path="data/base/structs/blguard1.pie" data-name="Guard Tower">🏗️ Guard Tower Base</button>
+              <button class="ref-quick-chip" data-path="data/base/structs/blbfact.pie" data-name="Factory Base">🏗️ Factory Building</button>
+              <button class="ref-quick-chip" data-path="data/base/components/bodies/cybd_std.pie" data-name="Cyborg Body">🦾 Cyborg Body</button>
+            </div>
+          </div>
+
+          <!-- Or Open Local PIE File -->
+          <div class="ref-modal-section" style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 8px;">
+            <label class="ref-section-label">3. Or Load Local PIE File from Disk:</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button id="btn-browse-ref-file" class="btn btn-primary" style="flex:1;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                Browse Local .pie File...
+              </button>
+              <button id="btn-modal-clear-ref" class="btn" style="color: var(--accent-red); border-color: rgba(248, 113, 113, 0.3);">
+                ✕ Unload Reference
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast">Ready</div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <div id="loading-text" style="color: var(--text-main); font-weight: 500;">Loading model...</div>
+    </div>
+  </div>
+
+  <!-- Main Application Logic -->
+  <script src="pie_parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

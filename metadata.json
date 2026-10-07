@@ -1,0 +1,8 @@
+{
+  "name": "Warzone 2100 PIE 3D Engine & UV Inspector",
+  "description": "Interactive 3D inspection engine for Warzone 2100 PIE model files with syntax highlighting, 3D WebGL viewport, and UV map inspector.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
