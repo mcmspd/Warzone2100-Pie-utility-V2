@@ -169,27 +169,6 @@ select.model-select:hover, select.model-select:focus {
   background-color: #1d4ed8;
 }
 
-.model-meta-badges {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.meta-chip {
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-.meta-chip span {
-  color: var(--text-main);
-  font-weight: 600;
-}
-
 /* Repository Model & Tileset Selection Bar */
 #model-tileset-bar {
   height: 44px;
@@ -285,17 +264,6 @@ select.model-select:hover, select.model-select:focus {
 .btn-clear-search:hover {
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
-}
-
-.model-count-badge {
-  font-size: 11px;
-  color: var(--text-muted);
-  background-color: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-color);
-  padding: 3px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-  font-weight: 500;
 }
 
 /* Autocomplete Search Suggestions Dropdown */
@@ -485,26 +453,6 @@ select.tileset-select:hover, select.tileset-select:focus {
   background-color: rgba(236, 72, 153, 0.15);
   color: #f472b6;
   border-color: rgba(236, 72, 153, 0.4);
-}
-
-.badge-tileset-match {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background-color: rgba(74, 222, 128, 0.15);
-  color: var(--accent-green);
-  border: 1px solid rgba(74, 222, 128, 0.35);
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.badge-tileset-custom {
-  background-color: rgba(255, 204, 0, 0.15);
-  color: var(--accent-gold);
-  border-color: rgba(255, 204, 0, 0.35);
 }
 
 .tileset-variants-group {
@@ -1575,15 +1523,163 @@ select.tileset-select:hover, select.tileset-select:focus {
   gap: 6px;
 }
 
-/* 3D Viewport Variable Grid Controls */
+/* 3D Viewport Variable Grid Controls (vertical panel, right side) */
 .viewport-grid-controls {
-  display: inline-flex;
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  background-color: rgba(18, 20, 24, 0.88);
+  backdrop-filter: blur(8px);
+  padding: 10px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 15;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  width: 122px;
+  font-size: 14px;
+}
+
+.viewport-grid-controls .toggle-label {
+  justify-content: center;
+  font-size: 14px;
+}
+
+.viewport-grid-controls .grid-size-select,
+.viewport-grid-controls .grid-custom-input,
+.viewport-grid-controls .grid-y-input {
+  width: 100%;
+  font-size: 14px;
+  height: 30px;
+}
+
+/* No spinner arrows on the Y elevation input */
+.viewport-grid-controls .grid-y-input::-webkit-outer-spin-button,
+.viewport-grid-controls .grid-y-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.viewport-grid-controls .grid-y-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.viewport-grid-controls .grid-y-label {
+  text-align: center;
+  margin-right: 0;
+  font-size: 14px;
+}
+
+.viewport-grid-controls .btn-grid-step {
+  width: 100%;
+  height: 30px;
+  font-size: 14px;
+}
+
+.viewport-grid-controls .btn-grid-reset,
+.viewport-grid-controls .btn-grid-snap {
+  font-size: 12px;
+}
+
+.viewport-grid-controls .btn-grid-snap {
+  height: auto;
+  min-height: 30px;
+  white-space: normal;
+  line-height: 1.25;
+  padding: 4px 6px;
+}
+
+/* Transform Points floating panel */
+.transform-bar {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid rgba(168, 85, 247, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 12px rgba(168, 85, 247, 0.25);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: auto;
+  user-select: none;
+  max-width: calc(100% - 220px);
+}
+
+.transform-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ts-row {
+  display: flex;
   align-items: center;
   gap: 6px;
-  background-color: var(--bg-tertiary);
-  padding: 2px 8px;
-  border-radius: 4px;
+}
+
+.ts-row-label {
+  width: 62px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #c084fc;
+  font-family: var(--font-mono);
+}
+
+.ts-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.ts-input {
+  width: 62px;
+  background-color: var(--bg-secondary);
+  color: var(--text-main);
   border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  outline: none;
+  height: 24px;
+  transition: border-color 0.15s ease;
+}
+
+.ts-input:focus, .ts-input:hover {
+  border-color: #a855f7;
+}
+
+.ts-select {
+  background-color: var(--bg-secondary);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  outline: none;
+  cursor: pointer;
+  height: 24px;
+  transition: border-color 0.15s ease;
+}
+
+.ts-select:focus, .ts-select:hover {
+  border-color: #a855f7;
 }
 
 .grid-size-select {
@@ -1621,35 +1717,18 @@ select.tileset-select:hover, select.tileset-select:focus {
   box-shadow: 0 0 0 2px var(--accent-cyan-glow);
 }
 
-.grid-box-badge {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  color: var(--accent-cyan);
-  background: rgba(56, 189, 248, 0.12);
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  white-space: nowrap;
-}
-
-.grid-box-badge.grid-badge-hidden {
-  color: var(--text-muted);
-  background: rgba(148, 163, 184, 0.1);
-  border-color: rgba(148, 163, 184, 0.2);
-}
-
 .grid-divider {
-  width: 1px;
-  height: 16px;
+  width: 100%;
+  height: 1px;
   background-color: var(--border-color);
-  margin: 0 2px;
+  margin: 2px 0;
 }
 
 .grid-y-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
 }
 
 .grid-y-label {

@@ -41,6 +41,10 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.5"></circle><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line></svg>
             Create Points
           </button>
+          <button id="btn-mode-transform" class="btn" title="Transform Points Mode: Select vertices, then scale, rotate or move them to generate new transformed points">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><polyline points="5 9 2 12 5 15"></polyline><polyline points="19 9 22 12 19 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="9 19 12 22 15 19"></polyline></svg>
+            Transform Points
+          </button>
         </div>
 
         <div class="btn-group">
@@ -64,13 +68,6 @@
         </div>
       </div>
 
-      <div class="model-meta-badges">
-        <div class="meta-chip">ITEM: <span id="meta-item-name">Heavy Cannon Fortress</span></div>
-        <div class="meta-chip">VER: <span id="meta-version">-</span></div>
-        <div class="meta-chip">POLYS: <span id="meta-polys">-</span></div>
-        <div class="meta-chip">VERTS: <span id="meta-points">-</span></div>
-        <div class="meta-chip">CONNS: <span id="meta-connectors">-</span></div>
-      </div>
     </header>
 
     <!-- Repository Model & Tileset Selection Bar -->
@@ -98,8 +95,6 @@
           </select>
         </div>
 
-        <span id="model-count-badge" class="model-count-badge" title="Matching models count">873 models</span>
-
         <span id="model-item-tag" class="in-game-item-tag tag-structure" title="Corresponding structure/weapon/propulsion from Warzone 2100 stats">
           [Structure] Heavy Cannon Fortress
         </span>
@@ -123,10 +118,6 @@
           </select>
         </div>
 
-        <span id="tileset-match-badge" class="badge-tileset-match" title="Indicates whether texture matches the PIE file specification">
-          ✓ PIE Specified
-        </span>
-
         <button id="btn-apply-tileset-to-pie" class="btn btn-sm btn-primary" style="display:none;" title="Update PIE code TEXTURE directive with this selected tileset">
           Apply to PIE
         </button>
@@ -149,6 +140,7 @@
               <button id="btn-toggle-edit" class="btn btn-sm" title="Toggle between syntax inspection and text editing">Edit</button>
               <button id="btn-apply-text" class="btn btn-sm btn-primary" style="display:none;" title="Recompile PIE text into 3D model">Apply Changes</button>
               <button id="btn-copy-text" class="btn btn-sm" title="Copy PIE contents to clipboard">Copy</button>
+              <button id="btn-download-pie" class="btn btn-sm" title="Download current PIE file">Download</button>
             </div>
           </div>
 
@@ -194,38 +186,36 @@
             </div>
             <div class="pane-actions">
               <span id="viewport-stats" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">Hover or click any face</span>
-              <div class="viewport-grid-controls">
-                <label class="toggle-label" title="Toggle ground coordinate grid">
-                  <input type="checkbox" id="chk-show-grid" checked> Grid:
-                </label>
-                <select id="sel-grid-size" class="grid-size-select" title="Ground grid box size in coordinate units">
-                  <option value="4">4 u (Ultra-Fine)</option>
-                  <option value="8">8 u (Fine)</option>
-                  <option value="16" selected>16 u (Default)</option>
-                  <option value="32">32 u (Medium)</option>
-                  <option value="64">64 u (0.5 Tile)</option>
-                  <option value="128">128 u (1 Tile)</option>
-                  <option value="256">256 u (2×2 Tiles)</option>
-                  <option value="custom">Custom...</option>
-                </select>
-                <input type="number" id="input-custom-grid" class="grid-custom-input" min="1" max="1024" value="16" style="display:none;" title="Enter custom grid box size in coordinate units">
-                <span id="grid-box-badge" class="grid-box-badge" title="Coordinate distance of 1 grid box">16×16u</span>
-
-                <div class="grid-divider"></div>
-
-                <div class="grid-y-control" title="Shift grid elevation along the Y axis (scroll wheel, step, or type)">
-                  <span class="grid-y-label">Y:</span>
-                  <button id="btn-grid-y-down" class="btn-grid-step" title="Shift grid down (-8u, Shift for -1u, Alt for -16u)">▼</button>
-                  <input type="number" id="input-grid-y" class="grid-y-input" value="0" step="1" title="Grid Y elevation (type or scroll)">
-                  <button id="btn-grid-y-up" class="btn-grid-step" title="Shift grid up (+8u, Shift for +1u, Alt for +16u)">▲</button>
-                  <button id="btn-grid-y-reset" class="btn-grid-step btn-grid-reset" title="Reset grid elevation to ground (Y = 0)">0</button>
-                  <button id="btn-grid-y-snap" class="btn-grid-step btn-grid-snap" title="Snap grid Y to elevation of selected vertex or face">Snap</button>
-                </div>
-              </div>
             </div>
           </div>
 
           <div id="threejs-canvas-container">
+            <!-- Floating vertical grid controls (right side) -->
+            <div class="viewport-grid-controls">
+              <label class="toggle-label" title="Toggle ground coordinate grid">
+                <input type="checkbox" id="chk-show-grid" checked> Grid:
+              </label>
+              <select id="sel-grid-size" class="grid-size-select" title="Ground grid box size in coordinate units">
+                <option value="1">1×1</option>
+                <option value="2">2×2</option>
+                <option value="4">4×4</option>
+                <option value="8">8×8</option>
+                <option value="16" selected>16×16</option>
+                <option value="32">32×32</option>
+              </select>
+              <input type="number" id="input-custom-grid" class="grid-custom-input" min="1" max="1024" value="16" style="display:none;" title="Enter custom grid box size in coordinate units">
+
+              <div class="grid-divider"></div>
+
+              <div class="grid-y-control" title="Shift grid elevation along the Y axis (scroll wheel, step, or type)">
+                <span class="grid-y-label">Y:</span>
+                <button id="btn-grid-y-up" class="btn-grid-step" title="Shift grid up (+8u, Shift for +1u, Alt for +16u)">▲</button>
+                <input type="number" id="input-grid-y" class="grid-y-input" value="0" step="1" title="Grid Y elevation (type or scroll)">
+                <button id="btn-grid-y-down" class="btn-grid-step" title="Shift grid down (-8u, Shift for -1u, Alt for -16u)">▼</button>
+                <button id="btn-grid-y-reset" class="btn-grid-step btn-grid-reset" title="Reset grid elevation to ground (Y = 0)">Reset to zero</button>
+                <button id="btn-grid-y-snap" class="btn-grid-step btn-grid-snap" title="Snap grid Y to elevation of selected vertex, face or connector">Snap to selected</button>
+              </div>
+            </div>
             <!-- Floating Create Polygon Helper Banner -->
             <div id="create-poly-bar" class="create-poly-bar" style="display:none;">
               <div class="create-poly-header">
@@ -255,6 +245,45 @@
               </div>
               <div class="create-poly-actions">
                 <button id="btn-exit-create-point" class="btn btn-sm btn-primary" title="Exit Create Points mode">Done</button>
+              </div>
+            </div>
+
+            <!-- Floating Transform Points Helper Panel -->
+            <div id="transform-bar" class="transform-bar" style="display:none;">
+              <div class="create-poly-header">
+                <span class="create-poly-badge" style="background: rgba(168, 85, 247, 0.25); color: #c084fc; border-color: rgba(168, 85, 247, 0.5);">Transform Points Mode</span>
+                <span id="transform-step" class="create-poly-step">Click vertices in 3D viewport to select (0 selected)</span>
+              </div>
+              <div class="transform-rows">
+                <div class="ts-row">
+                  <span class="ts-row-label" title="Uniform scale applied in the 2D plane formed by the selected vertices (uniform 3D scale when fewer than 3 non-collinear points)">Scale</span>
+                  <label><input type="number" id="ts-s" class="ts-input" value="1" step="any" title="Uniform in-plane scale factor"></label>
+                </div>
+                <div class="ts-row">
+                  <span class="ts-row-label" title="Rotation in degrees about the pivot (XYZ order)">Rotate °</span>
+                  <label>X<input type="number" id="ts-rx" class="ts-input" value="0" step="any"></label>
+                  <label>Y<input type="number" id="ts-ry" class="ts-input" value="0" step="any"></label>
+                  <label>Z<input type="number" id="ts-rz" class="ts-input" value="0" step="any"></label>
+                </div>
+                <div class="ts-row">
+                  <span class="ts-row-label" title="Displacement added after scale and rotation">Move</span>
+                  <label>X<input type="number" id="ts-tx" class="ts-input" value="0" step="any"></label>
+                  <label>Y<input type="number" id="ts-ty" class="ts-input" value="0" step="any"></label>
+                  <label>Z<input type="number" id="ts-tz" class="ts-input" value="0" step="any"></label>
+                </div>
+                <div class="ts-row">
+                  <span class="ts-row-label" title="Point that scale and rotation are centered on">Pivot</span>
+                  <select id="ts-pivot" class="ts-select" title="Scale and rotation pivot">
+                    <option value="centroid" selected>Selection center</option>
+                    <option value="origin">Origin (0, 0, 0)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="create-poly-actions">
+                <button id="btn-apply-transform" class="btn btn-sm btn-primary" title="Generate new transformed points from the current selection">Create points</button>
+                <button id="btn-select-all-transform" class="btn btn-sm" title="Select all vertices">All</button>
+                <button id="btn-clear-transform" class="btn btn-sm" title="Clear selection (Esc)">Clear</button>
+                <button id="btn-exit-transform" class="btn btn-sm" title="Exit Transform Points mode">Done</button>
               </div>
             </div>
 

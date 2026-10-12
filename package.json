@@ -1,6 +1,6 @@
 {
   "name": "warzone2100-pie-utility",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Warzone 2100 PIE 3D Engine & UV Inspector",
   "type": "module",
   "scripts": {

@@ -11,7 +11,7 @@ const state = {
   piePath: 'warzone2100/Struct_Mod/stwpfcan.pie',
   textureImage: null,
   textureName: 'page-12-player-buildings.png',
-  mode: 'faces', // 'faces' | 'vertices' | 'create_poly' | 'edit_uv'
+  mode: 'faces', // 'faces' | 'vertices' | 'create_poly' | 'edit_uv' | 'transform'
   hoveredFaceIndex: null,
   pinnedFaceIndex: null,
   hoveredVertexIndex: null,
@@ -48,6 +48,12 @@ const state = {
   createPoint: {
     hasHit: false,
     currentPos: { x: 0, y: 0, z: 0 }
+  },
+
+  // Transform Points Mode State (vertex multi-select + transform params)
+  transform: {
+    selected: [], // array of PIE point indices
+    hoveredPtIndex: null
   },
 
   // UV Direct Editing on Tileset State
@@ -152,6 +158,22 @@ const FACE_POINT_THEMES = [
   }
 ];
 
+// Viewport transform matching WMIT v0.7.4 rendering
+// (https://github.com/Warzone2100/WMIT/releases/tag/v0.7.4):
+// QWZM::render applies glScalef(-s, s, s), i.e. PIE -X renders as
+// viewport +X and PIE +X as viewport -X; Y and Z pass through unchanged.
+// Only the viewport mapping is mirrored; PIE file data is never modified.
+// Triangles are written as (p0, p2, p1) with matching UVs because mirroring
+// flips orientation — this preserves front faces, mirroring WMIT's
+// glFrontFace(GL_CW) compensation for the same mirror.
+const VIEW_X_FLIP = -1;
+function toViewportX(x) {
+  return x * VIEW_X_FLIP;
+}
+function toPieX(xView) {
+  return xView * VIEW_X_FLIP;
+}
+
 // Helper to create sharp billboard badge sprites for 3D dots
 function createDotSprite(text, bgColor) {
   const canvas = document.createElement('canvas');
@@ -211,6 +233,8 @@ let createPolyDots = [];
 let createPointPreviewGroup = null;
 let createPointIndicatorGroup = null;
 let createPointStem = null;
+let transformPreviewGroup = null;
+let transformPreviewMarkers = [];
 let verticesPointCloud = null;
 let hoveredVertexMesh = null;
 let currentTexture = null;
@@ -233,11 +257,9 @@ function initDOMElements() {
   el.modelSelect = document.getElementById('model-select');
   el.modelItemTag = document.getElementById('model-item-tag');
   el.paneItemTag = document.getElementById('pane-item-tag');
-  el.metaItemName = document.getElementById('meta-item-name');
   el.modelSearchInput = document.getElementById('model-search-input');
   el.btnClearModelSearch = document.getElementById('btn-clear-model-search');
   el.modelSearchSuggestions = document.getElementById('model-search-suggestions');
-  el.modelCountBadge = document.getElementById('model-count-badge');
   el.btnRandomModel = document.getElementById('btn-random-model');
   el.btnCustomPath = document.getElementById('btn-custom-path');
   el.btnSyncRepo = document.getElementById('btn-sync-repo');
@@ -245,7 +267,6 @@ function initDOMElements() {
 
   el.tilesetSelect = document.getElementById('tileset-select');
   el.tilesetVariantButtons = document.getElementById('tileset-variant-buttons');
-  el.tilesetMatchBadge = document.getElementById('tileset-match-badge');
   el.btnApplyTilesetToPie = document.getElementById('btn-apply-tileset-to-pie');
 
   el.pathModal = document.getElementById('path-modal');
@@ -258,23 +279,20 @@ function initDOMElements() {
   el.btnFixWinding = document.getElementById('btn-fix-winding');
   el.fileInputPie = document.getElementById('file-input-pie');
   el.fileInputTex = document.getElementById('file-input-tex');
-  
-  el.metaVersion = document.getElementById('meta-version');
-  el.metaPolys = document.getElementById('meta-polys');
-  el.metaPoints = document.getElementById('meta-points');
-  el.metaConnectors = document.getElementById('meta-connectors');
-  
+
   el.textFilename = document.getElementById('text-filename');
   el.textViewerContainer = document.getElementById('text-viewer-container');
   el.textEditor = document.getElementById('text-editor');
   el.btnToggleEdit = document.getElementById('btn-toggle-edit');
   el.btnApplyText = document.getElementById('btn-apply-text');
   el.btnCopyText = document.getElementById('btn-copy-text');
+  el.btnDownloadPie = document.getElementById('btn-download-pie');
   
   el.btnModeFaces = document.getElementById('btn-mode-faces');
   el.btnModeVertices = document.getElementById('btn-mode-vertices');
   el.btnModeCreatePoly = document.getElementById('btn-mode-create-poly');
   el.btnModeCreatePoint = document.getElementById('btn-mode-create-point');
+  el.btnModeTransform = document.getElementById('btn-mode-transform');
   el.btnModeEditUV = document.getElementById('btn-mode-edit-uv');
 
   el.createPolyBar = document.getElementById('create-poly-bar');
@@ -289,6 +307,13 @@ function initDOMElements() {
   el.btnExitCreatePoly = document.getElementById('btn-exit-create-poly');
 
   el.createPointBar = document.getElementById('create-point-bar');
+  el.transformBar = document.getElementById('transform-bar');
+  el.transformStep = document.getElementById('transform-step');
+  el.tsPivot = document.getElementById('ts-pivot');
+  el.btnApplyTransform = document.getElementById('btn-apply-transform');
+  el.btnSelectAllTransform = document.getElementById('btn-select-all-transform');
+  el.btnClearTransform = document.getElementById('btn-clear-transform');
+  el.btnExitTransform = document.getElementById('btn-exit-transform');
   el.createPointStep = document.getElementById('create-point-step');
   el.chipPointCoords = document.getElementById('chip-point-coords');
   el.chipPointSnap = document.getElementById('chip-point-snap');
@@ -400,7 +425,7 @@ function init3DScene() {
   scene.background = new THREE.Color(0x0e1117);
 
   camera = new THREE.PerspectiveCamera(45, width / height, 1, 5000);
-  camera.position.set(220, 220, 280);
+  camera.position.set(220, 220, -280);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(width, height);
@@ -440,6 +465,9 @@ function init3DScene() {
   // Axis helper
   const axesHelper = new THREE.AxesHelper(40);
   axesHelper.position.y = 0.1;
+  // WMIT draws X, Y and -Z (negative Z is the model "front"), so the blue
+  // Z arm points toward -Z to match.
+  axesHelper.scale.z = VIEW_X_FLIP;
   scene.add(axesHelper);
 
   // Connector Markers Group
@@ -669,6 +697,12 @@ function init3DScene() {
   createPointPreviewGroup.visible = false;
   scene.add(createPointPreviewGroup);
 
+  // Transform Points ghost preview markers (gold, one per selected vertex)
+  transformPreviewGroup = new THREE.Group();
+  transformPreviewGroup.name = 'TransformPreviewGroup';
+  transformPreviewGroup.visible = false;
+  scene.add(transformPreviewGroup);
+
   // 3D Canvas Events
   renderer.domElement.addEventListener('mousemove', on3DMouseMove);
   renderer.domElement.addEventListener('mouseleave', () => {
@@ -682,6 +716,9 @@ function init3DScene() {
     } else if (state.mode === 'create_point') {
       if (createPointPreviewGroup) createPointPreviewGroup.visible = false;
       state.createPoint.hasHit = false;
+    } else if (state.mode === 'transform') {
+      state.transform.hoveredPtIndex = null;
+      if (hoveredVertexMesh) hoveredVertexMesh.visible = false;
     }
   });
 
@@ -751,7 +788,7 @@ function getClosestVertexToMouse(event, maxPixelRadius = 36) {
     const pt = pts[i];
     if (!pt) continue;
 
-    vProj.set(pt.x, pt.y, pt.z);
+    vProj.set(toViewportX(pt.x), pt.y, pt.z);
     vProj.project(camera);
 
     // If point is behind camera plane, skip
@@ -808,6 +845,20 @@ function on3DMouseMove(event) {
       onHoverVertex(closestIdx, '3d', event);
     } else {
       onHoverVertex(null, '3d');
+    }
+    return;
+  }
+
+  if (state.mode === 'transform') {
+    const closestIdx = getClosestVertexToMouse(event, 32);
+    state.transform.hoveredPtIndex = closestIdx;
+    if (closestIdx !== null && state.pieData && state.pieData.points[closestIdx]) {
+      const pt = state.pieData.points[closestIdx];
+      hoveredVertexMesh.position.set(toViewportX(pt.x), pt.y, pt.z);
+      hoveredVertexMesh.visible = true;
+      updateHoveredVertexMeshScale();
+    } else if (hoveredVertexMesh) {
+      hoveredVertexMesh.visible = false;
     }
     return;
   } else {
@@ -1183,6 +1234,7 @@ function handleUVDragging(e) {
   }
 
   // Live update Three.js BufferGeometry UV attribute for real-time model feedback!
+  // Note: viewport geometry stores verts as (p0, p2, p1) due to the X-mirror winding swap.
   if (mainMesh && mainMesh.geometry && mainMesh.geometry.attributes.uv) {
     const uvAttr = mainMesh.geometry.attributes.uv;
     const baseUV = poly.globalIndex * 6;
@@ -1190,11 +1242,11 @@ function handleUVDragging(e) {
       uvAttr.array[baseUV + 0] = poly.normUVs[0].u;
       uvAttr.array[baseUV + 1] = 1.0 - poly.normUVs[0].v;
 
-      uvAttr.array[baseUV + 2] = poly.normUVs[1].u;
-      uvAttr.array[baseUV + 3] = 1.0 - poly.normUVs[1].v;
+      uvAttr.array[baseUV + 2] = poly.normUVs[2].u;
+      uvAttr.array[baseUV + 3] = 1.0 - poly.normUVs[2].v;
 
-      uvAttr.array[baseUV + 4] = poly.normUVs[2].u;
-      uvAttr.array[baseUV + 5] = 1.0 - poly.normUVs[2].v;
+      uvAttr.array[baseUV + 4] = poly.normUVs[1].u;
+      uvAttr.array[baseUV + 5] = 1.0 - poly.normUVs[1].v;
       uvAttr.needsUpdate = true;
     }
   }
@@ -1533,28 +1585,30 @@ function buildModelGeometry(pieData) {
 
     if (!p0 || !p1 || !p2) continue;
 
+    // X mirror (PIE -X renders as viewport +X) with swapped winding to keep
+    // FrontSide faces outward after mirroring, matching WMIT.
     const basePos = i * 9;
-    positions[basePos + 0] = p0.x;
+    positions[basePos + 0] = toViewportX(p0.x);
     positions[basePos + 1] = p0.y;
     positions[basePos + 2] = p0.z;
 
-    positions[basePos + 3] = p1.x;
-    positions[basePos + 4] = p1.y;
-    positions[basePos + 5] = p1.z;
+    positions[basePos + 3] = toViewportX(p2.x);
+    positions[basePos + 4] = p2.y;
+    positions[basePos + 5] = p2.z;
 
-    positions[basePos + 6] = p2.x;
-    positions[basePos + 7] = p2.y;
-    positions[basePos + 8] = p2.z;
+    positions[basePos + 6] = toViewportX(p1.x);
+    positions[basePos + 7] = p1.y;
+    positions[basePos + 8] = p1.z;
 
     const baseUV = i * 6;
     uvs[baseUV + 0] = poly.normUVs[0].u;
     uvs[baseUV + 1] = 1.0 - poly.normUVs[0].v;
 
-    uvs[baseUV + 2] = poly.normUVs[1].u;
-    uvs[baseUV + 3] = 1.0 - poly.normUVs[1].v;
+    uvs[baseUV + 2] = poly.normUVs[2].u;
+    uvs[baseUV + 3] = 1.0 - poly.normUVs[2].v;
 
-    uvs[baseUV + 4] = poly.normUVs[2].u;
-    uvs[baseUV + 5] = 1.0 - poly.normUVs[2].v;
+    uvs[baseUV + 4] = poly.normUVs[1].u;
+    uvs[baseUV + 5] = 1.0 - poly.normUVs[1].v;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -1592,7 +1646,7 @@ function buildModelGeometry(pieData) {
   const pointColors = new Float32Array(points.length * 3);
   for (let i = 0; i < points.length; i++) {
     const pt = points[i];
-    pointPositions[i * 3 + 0] = pt.x;
+    pointPositions[i * 3 + 0] = toViewportX(pt.x);
     pointPositions[i * 3 + 1] = pt.y;
     pointPositions[i * 3 + 2] = pt.z;
     pointColors[i * 3 + 0] = 0.22;
@@ -1610,8 +1664,15 @@ function buildModelGeometry(pieData) {
     opacity: 0.9
   });
   verticesPointCloud = new THREE.Points(ptGeo, ptMat);
-  verticesPointCloud.visible = (state.mode === 'vertices' || state.mode === 'create_poly' || state.mode === 'create_point');
+  verticesPointCloud.visible = (state.mode === 'vertices' || state.mode === 'create_poly' || state.mode === 'create_point' || state.mode === 'transform');
   scene.add(verticesPointCloud);
+
+  // Keep transform selection valid across geometry rebuilds
+  if (state.mode === 'transform' && state.pieData) {
+    state.transform.selected = state.transform.selected.filter(i => i >= 0 && i < points.length);
+    updateTransformSelectionColors();
+    updateTransformPreview();
+  }
 
   // Connectors Visualizer
   buildConnectorsVisualizer(pieData.connectors);
@@ -1624,13 +1685,12 @@ function buildModelGeometry(pieData) {
     const maxDim = Math.max(size.x, size.y, size.z, 20);
 
     controls.target.set(0, 0, 0);
-    camera.position.set(maxDim * 1.4, maxDim * 1.1, maxDim * 1.5);
+    // WMIT default view looks at the model front (-Z) from above, so sit at +X, +Y, -Z.
+    camera.position.set(maxDim * 1.4, maxDim * 1.1, -maxDim * 1.5);
     camera.lookAt(0, 0, 0);
     controls.update();
     state.cameraInitialized = true;
   }
-
-  updateMetaChips(pieData);
 }
 
 function buildConnectorsVisualizer(connectors) {
@@ -1646,7 +1706,7 @@ function buildConnectorsVisualizer(connectors) {
 
   connectors.forEach((conn) => {
     const marker = new THREE.Mesh(sphereGeo, sphereMat);
-    marker.position.set(conn.x, conn.y, conn.z);
+    marker.position.set(toViewportX(conn.x), conn.y, conn.z);
     
     const ringGeo = new THREE.RingGeometry(4, 5.5, 24);
     const ringMat = new THREE.MeshBasicMaterial({ color: 0xfbbf24, side: THREE.DoubleSide });
@@ -1659,13 +1719,6 @@ function buildConnectorsVisualizer(connectors) {
 
   connectorsGroup.visible = state.showConnectors;
   updateConnectorsScale();
-}
-
-function updateMetaChips(pieData) {
-  el.metaVersion.textContent = `PIE ${pieData.version}`;
-  el.metaPolys.textContent = pieData.polygons.length;
-  el.metaPoints.textContent = pieData.points.length;
-  el.metaConnectors.textContent = pieData.connectors.length;
 }
 
 /**
@@ -1706,28 +1759,30 @@ function buildReferenceModelGeometry(pieData) {
     const p2 = points[poly.points[2]];
     if (!p0 || !p1 || !p2) continue;
 
+    // X mirror with swapped winding to keep outward normals/lighting
+    // correct after mirroring, matching WMIT.
     const basePos = i * 9;
-    positions[basePos + 0] = p0.x;
+    positions[basePos + 0] = toViewportX(p0.x);
     positions[basePos + 1] = p0.y;
     positions[basePos + 2] = p0.z;
 
-    positions[basePos + 3] = p1.x;
-    positions[basePos + 4] = p1.y;
-    positions[basePos + 5] = p1.z;
+    positions[basePos + 3] = toViewportX(p2.x);
+    positions[basePos + 4] = p2.y;
+    positions[basePos + 5] = p2.z;
 
-    positions[basePos + 6] = p2.x;
-    positions[basePos + 7] = p2.y;
-    positions[basePos + 8] = p2.z;
+    positions[basePos + 6] = toViewportX(p1.x);
+    positions[basePos + 7] = p1.y;
+    positions[basePos + 8] = p1.z;
 
     const baseUV = i * 6;
     uvs[baseUV + 0] = poly.normUVs[0].u;
     uvs[baseUV + 1] = 1.0 - poly.normUVs[0].v;
 
-    uvs[baseUV + 2] = poly.normUVs[1].u;
-    uvs[baseUV + 3] = 1.0 - poly.normUVs[1].v;
+    uvs[baseUV + 2] = poly.normUVs[2].u;
+    uvs[baseUV + 3] = 1.0 - poly.normUVs[2].v;
 
-    uvs[baseUV + 4] = poly.normUVs[2].u;
-    uvs[baseUV + 5] = 1.0 - poly.normUVs[2].v;
+    uvs[baseUV + 4] = poly.normUVs[1].u;
+    uvs[baseUV + 5] = 1.0 - poly.normUVs[1].v;
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -1768,14 +1823,14 @@ function buildReferenceModelGeometry(pieData) {
 
     pieData.connectors.forEach((conn) => {
       const marker = new THREE.Mesh(sphereGeo, sphereMat);
-      marker.position.set(conn.x, conn.y, conn.z);
+      marker.position.set(toViewportX(conn.x), conn.y, conn.z);
       connGroup.add(marker);
     });
     state.refModel.connectorsGroup = connGroup;
     state.refModel.group.add(connGroup);
   }
 
-  state.refModel.group.position.set(state.refModel.offsetX, state.refModel.offsetY, state.refModel.offsetZ);
+  state.refModel.group.position.set(toViewportX(state.refModel.offsetX), state.refModel.offsetY, state.refModel.offsetZ);
   state.refModel.group.visible = state.refModel.visible;
   updateRefConnectorsScale();
 }
@@ -2022,7 +2077,7 @@ function setReferenceOffset(x, y, z) {
   if (el.inputRefOffZ) el.inputRefOffZ.value = state.refModel.offsetZ;
 
   if (state.refModel.group) {
-    state.refModel.group.position.set(state.refModel.offsetX, state.refModel.offsetY, state.refModel.offsetZ);
+    state.refModel.group.position.set(toViewportX(state.refModel.offsetX), state.refModel.offsetY, state.refModel.offsetZ);
   }
 }
 
@@ -2333,9 +2388,9 @@ function update3DHighlight(polyIndex) {
   if (!p0 || !p1 || !p2) return;
 
   const positions = new Float32Array([
-    p0.x, p0.y, p0.z,
-    p1.x, p1.y, p1.z,
-    p2.x, p2.y, p2.z
+    toViewportX(p0.x), p0.y, p0.z,
+    toViewportX(p1.x), p1.y, p1.z,
+    toViewportX(p2.x), p2.y, p2.z
   ]);
 
   highlightMesh.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -2343,9 +2398,9 @@ function update3DHighlight(polyIndex) {
   highlightMesh.visible = true;
 
   const linePositions = new Float32Array([
-    p0.x, p0.y, p0.z,
-    p1.x, p1.y, p1.z,
-    p2.x, p2.y, p2.z
+    toViewportX(p0.x), p0.y, p0.z,
+    toViewportX(p1.x), p1.y, p1.z,
+    toViewportX(p2.x), p2.y, p2.z
   ]);
   const lineColors = new Float32Array([
     0.231, 0.510, 0.965, // Pt 1: Blue (#3b82f6)
@@ -2366,7 +2421,7 @@ function update3DHighlight(polyIndex) {
     facePointDots.forEach((dotObj, i) => {
       if (i < pts.length) {
         const pt = pts[i];
-        dotObj.group.position.set(pt.x, pt.y, pt.z);
+        dotObj.group.position.set(toViewportX(pt.x), pt.y, pt.z);
         dotObj.group.visible = true;
       } else {
         dotObj.group.visible = false;
@@ -2572,7 +2627,7 @@ function update3DVertexHighlight(vertIndex) {
   }
 
   const pt = state.pieData.points[vertIndex];
-  hoveredVertexMesh.position.set(pt.x, pt.y, pt.z);
+  hoveredVertexMesh.position.set(toViewportX(pt.x), pt.y, pt.z);
   hoveredVertexMesh.visible = true;
   updateHoveredVertexMeshScale();
 }
@@ -2691,7 +2746,7 @@ function updateCreatePolyPreview() {
     if (i < pts.length) {
       const ptObj = state.pieData.points[pts[i]];
       if (ptObj) {
-        d.group.position.set(ptObj.x, ptObj.y, ptObj.z);
+        d.group.position.set(toViewportX(ptObj.x), ptObj.y, ptObj.z);
         d.group.visible = true;
       }
     } else {
@@ -2714,19 +2769,19 @@ function updateCreatePolyPreview() {
   if (previewCoords.length >= 2) {
     const linePoss = [];
     for (let i = 0; i < previewCoords.length; i++) {
-      linePoss.push(previewCoords[i].x, previewCoords[i].y, previewCoords[i].z);
+      linePoss.push(toViewportX(previewCoords[i].x), previewCoords[i].y, previewCoords[i].z);
     }
     if (previewCoords.length === 3) {
-      linePoss.push(previewCoords[0].x, previewCoords[0].y, previewCoords[0].z);
+      linePoss.push(toViewportX(previewCoords[0].x), previewCoords[0].y, previewCoords[0].z);
     }
     createPolyLine.geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(linePoss), 3));
     createPolyLine.visible = true;
 
     if (previewCoords.length === 3) {
       const meshPoss = new Float32Array([
-        previewCoords[0].x, previewCoords[0].y, previewCoords[0].z,
-        previewCoords[1].x, previewCoords[1].y, previewCoords[1].z,
-        previewCoords[2].x, previewCoords[2].y, previewCoords[2].z
+        toViewportX(previewCoords[0].x), previewCoords[0].y, previewCoords[0].z,
+        toViewportX(previewCoords[1].x), previewCoords[1].y, previewCoords[1].z,
+        toViewportX(previewCoords[2].x), previewCoords[2].y, previewCoords[2].z
       ]);
       createPolyPreviewMesh.geometry.setAttribute('position', new THREE.BufferAttribute(meshPoss, 3));
       createPolyPreviewMesh.geometry.computeVertexNormals();
@@ -2837,7 +2892,9 @@ function updateCreatePointCursor(event) {
 
   if (hit) {
     const snapSize = (state.grid && state.grid.size) ? state.grid.size : 16;
-    const snappedX = Math.round(intersectPoint.x / snapSize) * snapSize;
+    // intersectPoint.x is viewport space (X-mirrored vs PIE); convert to PIE for storage/display.
+    const snappedXView = Math.round(intersectPoint.x / snapSize) * snapSize;
+    const snappedX = toPieX(snappedXView);
     const snappedY = Math.round(yLevel);
     const snappedZ = Math.round(intersectPoint.z / snapSize) * snapSize;
 
@@ -2845,7 +2902,7 @@ function updateCreatePointCursor(event) {
     state.createPoint.hasHit = true;
 
     if (createPointPreviewGroup) {
-      createPointPreviewGroup.position.set(snappedX, snappedY, snappedZ);
+      createPointPreviewGroup.position.set(snappedXView, snappedY, snappedZ);
       createPointPreviewGroup.visible = true;
 
       // Adjust scale dynamically for current camera distance and grid size
@@ -2915,6 +2972,244 @@ function createNewPointAt(x, y, z) {
   } catch (err) {
     console.error('Error re-parsing PIE model after adding point:', err);
     showToast('Error adding new point.');
+  }
+}
+
+/**
+ * -------------------------------------------------------------
+ * Transform Points Mode Logic (Select Vertices, Transform, Generate New Points)
+ * All math runs in PIE data space; only markers/preview use viewport mapping.
+ * Order per point: uniform scale in the 2D plane of the selection about the
+ * pivot -> rotate (XYZ, degrees) about the pivot -> translate.
+ * -------------------------------------------------------------
+ */
+function readTransformParams() {
+  const num = (elm, def) => {
+    if (!elm) return def;
+    const v = parseFloat(elm.value);
+    return Number.isFinite(v) ? v : def;
+  };
+  const byId = (id, def) => num(document.getElementById(id), def);
+  return {
+    s: byId('ts-s', 1),
+    rx: byId('ts-rx', 0), ry: byId('ts-ry', 0), rz: byId('ts-rz', 0),
+    tx: byId('ts-tx', 0), ty: byId('ts-ty', 0), tz: byId('ts-tz', 0),
+    pivotMode: el.tsPivot ? el.tsPivot.value : 'centroid'
+  };
+}
+
+function computeTransformPivot() {
+  const sel = state.transform.selected;
+  if (!state.pieData || sel.length === 0) return { x: 0, y: 0, z: 0 };
+  const params = readTransformParams();
+  if (params.pivotMode === 'origin') return { x: 0, y: 0, z: 0 };
+  let cx = 0, cy = 0, cz = 0, n = 0;
+  for (const idx of sel) {
+    const pt = state.pieData.points[idx];
+    if (!pt) continue;
+    cx += pt.x; cy += pt.y; cz += pt.z; n++;
+  }
+  if (n === 0) return { x: 0, y: 0, z: 0 };
+  return { x: cx / n, y: cy / n, z: cz / n };
+}
+
+const _transformEuler = { e: null, v: null };
+// Plane normal from the first three non-collinear selected points.
+// Returns a unit {x,y,z} or null when the selection is a single point,
+// empty, or collinear (caller falls back to uniform 3D scaling).
+function computeSelectionPlaneNormal() {
+  if (!state.pieData || state.transform.selected.length < 3) return null;
+  // Search all selected points for a non-collinear triple.
+  const all = state.transform.selected
+    .map(idx => state.pieData.points[idx])
+    .filter(Boolean);
+  for (let i = 0; i < all.length; i++) {
+    for (let j = i + 1; j < all.length; j++) {
+      const ax = all[j].x - all[i].x, ay = all[j].y - all[i].y, az = all[j].z - all[i].z;
+      for (let k = j + 1; k < all.length; k++) {
+        const bx = all[k].x - all[i].x, by = all[k].y - all[i].y, bz = all[k].z - all[i].z;
+        const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if (len > 1e-9) return { x: nx / len, y: ny / len, z: nz / len };
+      }
+    }
+  }
+  return null;
+}
+
+function applyTransformToPoint(pt, pivot, params, planeNormal) {
+  if (!_transformEuler.e) {
+    _transformEuler.e = new THREE.Euler(0, 0, 0, 'XYZ');
+    _transformEuler.v = new THREE.Vector3();
+  }
+  const deg2rad = Math.PI / 180;
+  _transformEuler.e.set(params.rx * deg2rad, params.ry * deg2rad, params.rz * deg2rad);
+
+  // Uniform scale in the selection plane: scale the in-plane component only,
+  // leaving the distance along the plane normal untouched. Without a valid
+  // plane this degrades to uniform 3D scaling about the pivot.
+  let dx = pt.x - pivot.x, dy = pt.y - pivot.y, dz = pt.z - pivot.z;
+  if (planeNormal && params.s !== 1) {
+    const along = dx * planeNormal.x + dy * planeNormal.y + dz * planeNormal.z;
+    const k = params.s - 1;
+    dx += k * (dx - along * planeNormal.x);
+    dy += k * (dy - along * planeNormal.y);
+    dz += k * (dz - along * planeNormal.z);
+  } else if (params.s !== 1) {
+    dx *= params.s; dy *= params.s; dz *= params.s;
+  }
+
+  _transformEuler.v.set(dx, dy, dz).applyEuler(_transformEuler.e);
+  return {
+    x: _transformEuler.v.x + pivot.x + params.tx,
+    y: _transformEuler.v.y + pivot.y + params.ty,
+    z: _transformEuler.v.z + pivot.z + params.tz
+  };
+}
+
+function toggleTransformSelection(vertIndex) {
+  if (!state.pieData || !state.pieData.points[vertIndex]) return;
+  const sel = state.transform.selected;
+  const at = sel.indexOf(vertIndex);
+  if (at >= 0) {
+    sel.splice(at, 1);
+  } else {
+    sel.push(vertIndex);
+  }
+  updateTransformSelectionColors();
+  updateTransformPreview();
+  updateTransformStats();
+}
+
+function clearTransformSelection() {
+  state.transform.selected = [];
+  state.transform.hoveredPtIndex = null;
+  if (hoveredVertexMesh) hoveredVertexMesh.visible = false;
+  resetPointCloudColors();
+  updateTransformPreview();
+  updateTransformStats();
+}
+
+function resetPointCloudColors() {
+  if (!verticesPointCloud || !verticesPointCloud.geometry) return;
+  const colAttr = verticesPointCloud.geometry.attributes.color;
+  if (!colAttr) return;
+  for (let i = 0; i < colAttr.count; i++) {
+    colAttr.setXYZ(i, 0.22, 0.74, 0.97);
+  }
+  colAttr.needsUpdate = true;
+}
+
+function updateTransformSelectionColors() {
+  if (!verticesPointCloud || !verticesPointCloud.geometry) return;
+  const colAttr = verticesPointCloud.geometry.attributes.color;
+  if (!colAttr || !state.pieData) return;
+  const sel = new Set(state.transform.selected);
+  const n = Math.min(colAttr.count, state.pieData.points.length);
+  for (let i = 0; i < n; i++) {
+    if (sel.has(i)) {
+      colAttr.setXYZ(i, 1.0, 0.75, 0.1); // gold = selected
+    } else {
+      colAttr.setXYZ(i, 0.22, 0.74, 0.97); // cyan = unselected
+    }
+  }
+  colAttr.needsUpdate = true;
+}
+
+function updateTransformPreview() {
+  if (!transformPreviewGroup) return;
+  const sel = state.transform.selected;
+  if (state.mode !== 'transform' || !state.pieData || sel.length === 0) {
+    transformPreviewGroup.visible = false;
+    return;
+  }
+
+  const pivot = computeTransformPivot();
+  const params = readTransformParams();
+  const planeNormal = computeSelectionPlaneNormal();
+
+  // Grow marker pool as needed (shared geometry/material)
+  while (transformPreviewMarkers.length < sel.length) {
+    const m = new THREE.Mesh(
+      new THREE.SphereGeometry(5.0, 14, 14),
+      new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.9, depthTest: false })
+    );
+    m.renderOrder = 10005;
+    transformPreviewGroup.add(m);
+    transformPreviewMarkers.push(m);
+  }
+
+  transformPreviewMarkers.forEach((m, i) => {
+    if (i < sel.length) {
+      const pt = state.pieData.points[sel[i]];
+      if (pt) {
+        const np = applyTransformToPoint(pt, pivot, params, planeNormal);
+        m.position.set(toViewportX(np.x), np.y, np.z);
+        m.visible = true;
+      } else {
+        m.visible = false;
+      }
+    } else {
+      m.visible = false;
+    }
+  });
+  transformPreviewGroup.visible = true;
+}
+
+function updateTransformStats() {
+  const n = state.transform.selected.length;
+  if (el.transformStep) {
+    el.transformStep.textContent = `Click vertices in 3D viewport to select (${n} selected)`;
+  }
+  if (el.btnApplyTransform) {
+    el.btnApplyTransform.textContent = n > 0 ? `Create ${n} point${n === 1 ? '' : 's'}` : 'Create points';
+  }
+  if (state.mode === 'transform' && el.viewportStats) {
+    el.viewportStats.textContent = n > 0
+      ? `Transform Mode: ${n} selected — adjust scale / rotate / move, then Create`
+      : 'Transform Mode: Click vertices in 3D viewport to select';
+  }
+}
+
+function applyTransformCreatePoints() {
+  if (!state.pieData || !state.rawText) {
+    showToast('No PIE model loaded.');
+    return;
+  }
+  const sel = state.transform.selected.filter(idx => state.pieData.points[idx]);
+  if (sel.length === 0) {
+    showToast('Select at least one vertex first.');
+    return;
+  }
+
+  const pivot = computeTransformPivot();
+  const params = readTransformParams();
+  const planeNormal = computeSelectionPlaneNormal();
+  let text = state.rawText;
+  let created = 0;
+  for (const idx of sel) {
+    const pt = state.pieData.points[idx];
+    if (!pt) continue;
+    const np = applyTransformToPoint(pt, pivot, params, planeNormal);
+    const result = PieParser.addPoint(text, np.x, np.y, np.z);
+    text = result.text;
+    created++;
+  }
+
+  state.rawText = text;
+  if (el.textEditor) el.textEditor.value = text;
+
+  try {
+    const newParsed = PieParser.parse(text);
+    state.pieData = newParsed;
+    buildModelGeometry(newParsed);
+    renderTextView(newParsed, text);
+    renderTileset();
+    clearTransformSelection();
+    showToast(`Created ${created} transformed point${created === 1 ? '' : 's'}!`);
+  } catch (err) {
+    console.error('Error re-parsing PIE model after transform:', err);
+    showToast('Error creating transformed points.');
   }
 }
 
@@ -3057,16 +3352,17 @@ function applyUvTransformation(fn) {
   fn(poly, imgW, imgH, isPie2);
 
   // Live update Three.js BufferGeometry UVs
+  // Note: viewport geometry stores verts as (p0, p2, p1) due to the X-mirror winding swap.
   if (mainMesh && mainMesh.geometry && mainMesh.geometry.attributes.uv) {
     const uvAttr = mainMesh.geometry.attributes.uv;
     const baseUV = poly.globalIndex * 6;
     if (baseUV + 5 < uvAttr.array.length) {
       uvAttr.array[baseUV + 0] = poly.normUVs[0].u;
       uvAttr.array[baseUV + 1] = 1.0 - poly.normUVs[0].v;
-      uvAttr.array[baseUV + 2] = poly.normUVs[1].u;
-      uvAttr.array[baseUV + 3] = 1.0 - poly.normUVs[1].v;
-      uvAttr.array[baseUV + 4] = poly.normUVs[2].u;
-      uvAttr.array[baseUV + 5] = 1.0 - poly.normUVs[2].v;
+      uvAttr.array[baseUV + 2] = poly.normUVs[2].u;
+      uvAttr.array[baseUV + 3] = 1.0 - poly.normUVs[2].v;
+      uvAttr.array[baseUV + 4] = poly.normUVs[1].u;
+      uvAttr.array[baseUV + 5] = 1.0 - poly.normUVs[1].v;
       uvAttr.needsUpdate = true;
     }
   }
@@ -3514,15 +3810,25 @@ function renderSavedUvList() {
  * -------------------------------------------------------------
  */
 function setInspectionMode(mode) {
+  const wasTransform = state.mode === 'transform';
   state.mode = mode;
   if (el.btnModeFaces) el.btnModeFaces.classList.toggle('active', mode === 'faces');
   if (el.btnModeVertices) el.btnModeVertices.classList.toggle('active', mode === 'vertices');
   if (el.btnModeCreatePoly) el.btnModeCreatePoly.classList.toggle('active', mode === 'create_poly');
   if (el.btnModeCreatePoint) el.btnModeCreatePoint.classList.toggle('active', mode === 'create_point');
+  if (el.btnModeTransform) el.btnModeTransform.classList.toggle('active', mode === 'transform');
   if (el.btnModeEditUV) el.btnModeEditUV.classList.toggle('active', mode === 'edit_uv');
 
+  // Leaving Transform mode: hide its panel/preview and restore point colors
+  if (wasTransform && mode !== 'transform') {
+    if (el.transformBar) el.transformBar.style.display = 'none';
+    if (transformPreviewGroup) transformPreviewGroup.visible = false;
+    if (hoveredVertexMesh) hoveredVertexMesh.visible = false;
+    resetPointCloudColors();
+  }
+
   if (verticesPointCloud) {
-    verticesPointCloud.visible = (mode === 'vertices' || mode === 'create_poly' || mode === 'create_point');
+    verticesPointCloud.visible = (mode === 'vertices' || mode === 'create_poly' || mode === 'create_point' || mode === 'transform');
   }
 
   if (mode === 'create_point') {
@@ -3550,6 +3856,18 @@ function setInspectionMode(mode) {
     resetCreatePolyState();
     showToast('Create Polygon Mode: Click 3 points in 3D viewport');
     el.viewportStats.textContent = 'Create Poly Mode: Select 3 points on the 3D model';
+  } else if (mode === 'transform') {
+    if (el.createPointBar) el.createPointBar.style.display = 'none';
+    if (createPointPreviewGroup) createPointPreviewGroup.visible = false;
+    if (renderer && renderer.domElement) renderer.domElement.style.cursor = 'default';
+    el.createPolyBar.style.display = 'none';
+    el.uvEditToolbar.style.display = 'none';
+    if (el.transformBar) el.transformBar.style.display = 'flex';
+    if (hoveredVertexMesh) hoveredVertexMesh.visible = false;
+    updateTransformSelectionColors();
+    updateTransformPreview();
+    updateTransformStats();
+    showToast('Transform Points Mode: Click vertices to select, then scale / rotate / move');
   } else if (mode === 'edit_uv') {
     if (el.createPointBar) el.createPointBar.style.display = 'none';
     if (createPointPreviewGroup) createPointPreviewGroup.visible = false;
@@ -3588,11 +3906,27 @@ function initEventListeners() {
   if (el.btnModeVertices) el.btnModeVertices.addEventListener('click', () => setInspectionMode('vertices'));
   if (el.btnModeCreatePoly) el.btnModeCreatePoly.addEventListener('click', () => setInspectionMode('create_poly'));
   if (el.btnModeCreatePoint) el.btnModeCreatePoint.addEventListener('click', () => setInspectionMode('create_point'));
+  if (el.btnModeTransform) el.btnModeTransform.addEventListener('click', () => setInspectionMode('transform'));
   if (el.btnModeEditUV) el.btnModeEditUV.classList.toggle('active', false);
 
   if (el.btnResetCreatePoly) el.btnResetCreatePoly.addEventListener('click', () => resetCreatePolyState());
   if (el.btnExitCreatePoly) el.btnExitCreatePoly.addEventListener('click', () => setInspectionMode('faces'));
   if (el.btnExitCreatePoint) el.btnExitCreatePoint.addEventListener('click', () => setInspectionMode('vertices'));
+  if (el.btnApplyTransform) el.btnApplyTransform.addEventListener('click', () => applyTransformCreatePoints());
+  if (el.btnSelectAllTransform) el.btnSelectAllTransform.addEventListener('click', () => {
+    if (!state.pieData) return;
+    state.transform.selected = state.pieData.points.map((_, i) => i);
+    updateTransformSelectionColors();
+    updateTransformPreview();
+    updateTransformStats();
+  });
+  if (el.btnClearTransform) el.btnClearTransform.addEventListener('click', () => clearTransformSelection());
+  if (el.btnExitTransform) el.btnExitTransform.addEventListener('click', () => setInspectionMode('vertices'));
+  ['ts-s', 'ts-rx', 'ts-ry', 'ts-rz', 'ts-tx', 'ts-ty', 'ts-tz'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener('input', () => updateTransformPreview());
+  });
+  if (el.tsPivot) el.tsPivot.addEventListener('change', () => updateTransformPreview());
   if (el.btnFixWinding) el.btnFixWinding.addEventListener('click', () => fixAllPolygonWindingsAction());
 
   // 3D Viewport Ground Grid Controls
@@ -3874,6 +4208,16 @@ function initEventListeners() {
         return;
       }
 
+      if (state.mode === 'transform') {
+        const hitIdx = (state.transform.hoveredPtIndex !== null)
+          ? state.transform.hoveredPtIndex
+          : getClosestVertexToMouse(event, 32);
+        if (hitIdx !== null) {
+          toggleTransformSelection(hitIdx);
+        }
+        return;
+      }
+
       // Faces or Edit UV mode: pin polygon on click
       if (mainMesh) {
         const intersects = raycaster.intersectObject(mainMesh);
@@ -3940,6 +4284,11 @@ function initEventListeners() {
       if (state.mode === 'create_point') {
         setInspectionMode('vertices');
         showToast('Exited Create Points mode');
+        return;
+      }
+      if (state.mode === 'transform' && state.transform.selected.length > 0) {
+        clearTransformSelection();
+        showToast('Transform selection cleared');
         return;
       }
       if (state.mode === 'create_poly' && state.createPoly.selectedPoints.length > 0) {
@@ -4014,14 +4363,23 @@ function initEventListeners() {
   // Apply Changes from text editor
   el.btnApplyText.addEventListener('click', () => {
     try {
-      const text = el.textEditor.value;
+      let text = el.textEditor.value;
+      // Always verify and correct section counts after a manual edit
+      const { text: fixedText, corrections } = PieParser.fixSectionCounts(text);
+      if (corrections.length > 0) {
+        text = fixedText;
+        el.textEditor.value = fixedText;
+      }
       const parsed = PieParser.parse(text);
       state.pieData = parsed;
       state.rawText = text;
       buildModelGeometry(parsed);
       renderTextView(parsed, text);
       renderTileset();
-      showToast(`Model updated! (${parsed.points.length} pts, ${parsed.polygons.length} polys)`);
+      const fixMsg = corrections.length > 0
+        ? ` (corrected ${corrections.map(c => `${c.section} ${c.from === null ? '?' : c.from}→${c.to}`).join(', ')})`
+        : '';
+      showToast(`Model updated! (${parsed.points.length} pts, ${parsed.polygons.length} polys)${fixMsg}`);
     } catch (err) {
       console.error(err);
       showToast('Error parsing PIE file: ' + err.message);
@@ -4034,6 +4392,26 @@ function initEventListeners() {
       showToast('PIE text copied to clipboard!');
     });
   });
+
+  // Download current PIE file
+  if (el.btnDownloadPie) {
+    el.btnDownloadPie.addEventListener('click', () => {
+      if (!state.rawText) {
+        showToast('No PIE model loaded to download.');
+        return;
+      }
+      const blob = new Blob([state.rawText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = state.pieFilename || 'model.pie';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Downloaded ${a.download}`);
+    });
+  }
 
   // Open Local Files
   el.btnOpenPie.addEventListener('click', () => el.fileInputPie.click());
@@ -4558,12 +4936,6 @@ function populateModelDropdown(models, filterQuery = '') {
 
   state.filteredModels = filtered;
 
-  if (el.modelCountBadge) {
-    el.modelCountBadge.textContent = q
-      ? `${filtered.length} / ${models.length} models`
-      : `${models.length} models`;
-  }
-
   if (filtered.length === 0) {
     const noOpt = document.createElement('option');
     noOpt.value = '';
@@ -5041,19 +5413,8 @@ function populateTilesetDropdown(currentTexture, specifiedTexturesList = []) {
 }
 
 function updateTilesetMatchStatus(isMatch) {
-  if (!el.tilesetMatchBadge) return;
-
-  if (isMatch) {
-    el.tilesetMatchBadge.textContent = '✓ PIE Specified';
-    el.tilesetMatchBadge.className = 'badge-tileset-match';
-    el.tilesetMatchBadge.title = 'Active tileset matches the TEXTURE directive specified in the PIE file';
-    if (el.btnApplyTilesetToPie) el.btnApplyTilesetToPie.style.display = 'none';
-  } else {
-    el.tilesetMatchBadge.textContent = 'Alternate Tileset';
-    el.tilesetMatchBadge.className = 'badge-tileset-match badge-tileset-custom';
-    el.tilesetMatchBadge.title = 'Viewing model with alternate tileset. Click "Apply to PIE" to write to PIE file';
-    if (el.btnApplyTilesetToPie) el.btnApplyTilesetToPie.style.display = 'inline-flex';
-  }
+  // Badge removed; keep the Apply-button visibility logic.
+  if (el.btnApplyTilesetToPie) el.btnApplyTilesetToPie.style.display = isMatch ? 'none' : 'inline-flex';
 }
 
 /**
@@ -5292,10 +5653,6 @@ function updateModelInGameBadge(filename, piePath) {
     } else {
       el.paneItemTag.style.display = 'none';
     }
-  }
-
-  if (el.metaItemName) {
-    el.metaItemName.textContent = relatedName || 'Standard Model';
   }
 }
 

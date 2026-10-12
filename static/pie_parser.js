@@ -1034,6 +1034,73 @@ class PieParser {
       deletedPolysCount: deletedPolysCount
     };
   }
+
+  /**
+   * Verify and correct POINTS, POLYGONS and CONNECTORS header counts.
+   * Recounts the actual data rows in every section (per LEVEL) and rewrites
+   * any header whose declared count differs. Blank lines and #-comments are
+   * never counted. Header formatting (indentation, keyword case, trailing
+   * comment) is preserved. Returns the fixed text plus a corrections list.
+   */
+  static fixSectionCounts(rawText) {
+    const HEADER_COMMANDS = new Set([
+      'PIE', 'TYPE', 'TEXTURE', 'TCMASK', 'NORMALMAP', 'SPECULARMAP',
+      'INTERPOLATE', 'EVENT', 'LEVELS', 'LEVEL', 'POINTS', 'NORMALS',
+      'POLYGONS', 'CONNECTORS', 'ANIMOBJECT', 'SHADOWPOINTS',
+      'SHADOWPOLYGONS', 'MATERIALS', 'SHADERS'
+    ]);
+    const COUNTED_SECTIONS = new Set(['POINTS', 'POLYGONS', 'CONNECTORS']);
+
+    const stripComment = (line) => {
+      const idx = line.indexOf('#');
+      return idx === -1 ? line : line.substring(0, idx);
+    };
+    const isDirective = (tokens) => tokens.length > 0 && HEADER_COMMANDS.has(tokens[0].toUpperCase());
+
+    const lines = rawText.split(/\r?\n/);
+    const corrections = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const code = stripComment(lines[i]).trim();
+      if (!code) continue;
+      const tokens = code.split(/\s+/);
+      const cmd = tokens[0].toUpperCase();
+      if (!COUNTED_SECTIONS.has(cmd)) continue;
+
+      // Count data rows until the next directive header (scopes per LEVEL)
+      let count = 0;
+      for (let j = i + 1; j < lines.length; j++) {
+        const rowCode = stripComment(lines[j]).trim();
+        if (!rowCode) continue;
+        const rowTokens = rowCode.split(/\s+/);
+        if (isDirective(rowTokens)) break;
+        // Mirror PieParser.parse acceptance: POINTS/CONNECTORS rows need
+        // at least 3 tokens; POLYGONS rows are consumed as-is.
+        if (cmd === 'POLYGONS' || rowTokens.length >= 3) {
+          count++;
+        }
+      }
+
+      const declared = parseInt(tokens[1], 10);
+      if (!Number.isFinite(declared) || declared !== count) {
+        const origLine = lines[i];
+        const commentIdx = origLine.indexOf('#');
+        const comment = commentIdx === -1 ? '' : origLine.substring(commentIdx);
+        const leadingMatch = origLine.match(/^(\s*)/);
+        const leading = leadingMatch ? leadingMatch[1] : '';
+        const dirWord = code.split(/\s+/)[0]; // preserve original keyword case
+        lines[i] = `${leading}${dirWord} ${count}` + (comment ? ' ' + comment : '');
+        corrections.push({
+          section: cmd,
+          from: Number.isFinite(declared) ? declared : null,
+          to: count,
+          lineNum: i + 1
+        });
+      }
+    }
+
+    return { text: lines.join('\n'), corrections };
+  }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
