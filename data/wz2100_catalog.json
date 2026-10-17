@@ -28701,13 +28701,13 @@
         }
       ],
       "defaultTexture": "page-12-player-buildings.png",
-      "inGameName": "Heavy Cannon Fortress",
+      "inGameName": "Cannon Fortress",
       "inGameType": "Structure",
-      "relatedItem": "Heavy Cannon Fortress",
+      "relatedItem": "Cannon Fortress",
       "relatedType": "Structure",
       "relatedItems": [
         {
-          "name": "Heavy Cannon Fortress",
+          "name": "Cannon Fortress",
           "type": "Structure",
           "id": "stwpfcan",
           "role": "Main Model"

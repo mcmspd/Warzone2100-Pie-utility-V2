@@ -119,7 +119,7 @@ function generateBuildingsTexture() {
 }
 
 function generateStwpfcanPie() {
-  // Warzone 2100 Heavy Cannon Fortress (stwpfcan.pie)
+  // Warzone 2100 Cannon Fortress (stwpfcan.pie)
   // Designed so Line 7 is Vertex #0 (-38 0 128), Line 10 is Vertex #3 (-50 77 128)
   // Line 74 is Polygon #0 (3 2 1 with UVs 100,172 121,172 130,208)
   const lines = [];
@@ -209,7 +209,7 @@ function generateStwpfcanPie() {
   lines.push("\t-125 -15 -125");// 59
 
   // Lines 67-72: Comments to hit exact line numbers
-  lines.push("# Warzone 2100 Heavy Cannon Fortress Pillbox"); // Line 67
+  lines.push("# Warzone 2100 Cannon Fortress Pillbox"); // Line 67
   lines.push("# Struct_Mod Fortified Defensive Structure");   // Line 68
   lines.push("# Texture: page-12-player-buildings.png");       // Line 69
   lines.push("# Geometry: Octagonal bunker with dual heavy cannon"); // Line 70

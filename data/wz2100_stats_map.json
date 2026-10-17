@@ -9798,11 +9798,11 @@
     ]
   },
   "stwpfcan.pie": {
-    "primaryName": "Heavy Cannon Fortress",
+    "primaryName": "Cannon Fortress",
     "primaryType": "Structure",
     "items": [
       {
-        "name": "Heavy Cannon Fortress",
+        "name": "Cannon Fortress",
         "type": "Structure",
         "id": "stwpfcan",
         "role": "Main Model"

@@ -207,16 +207,42 @@ function loadCatalog(): { pies: ModelInfo[]; textures: string[] } {
   return { pies: [], textures: [] };
 }
 
+// ---- MP assembly stats (data/mp/stats) for the JSON viewer + engine-fashion assembly ----
+const MP_STATS_DIR = path.join(DATA_DIR, 'stats', 'mp');
+const MP_STATS_FILES = ['weapons.json', 'structure.json', 'templates.json', 'body.json', 'propulsion.json'];
+
+let mpStatsCache: Record<string, Record<string, any>> | null = null;
+
+function loadMpStatsFile(file: string): Record<string, any> {
+  if (!MP_STATS_FILES.includes(file)) return {};
+  if (!mpStatsCache) mpStatsCache = {};
+  if (!mpStatsCache[file]) {
+    try {
+      const full = path.join(MP_STATS_DIR, file);
+      if (fs.existsSync(full)) {
+        const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+        mpStatsCache[file] = (parsed && typeof parsed === 'object') ? parsed : {};
+      } else {
+        mpStatsCache[file] = {};
+      }
+    } catch (e) {
+      console.warn(`Could not parse MP stats ${file}`, e);
+      mpStatsCache[file] = {};
+    }
+  }
+  return mpStatsCache[file];
+}
+
 function getAvailableModels(): ModelInfo[] {
   const models: ModelInfo[] = [];
 
-  // Default Priority 1: Struct_Mod Heavy Cannon Fortress
+  // Default Priority 1: Struct_Mod Cannon Fortress
   const defaultPath = 'warzone2100/Struct_Mod/stwpfcan.pie';
   const fullDefault = path.join(DATA_DIR, defaultPath);
   if (fs.existsSync(fullDefault)) {
     models.push({
       id: 'stwpfcan',
-      name: 'stwpfcan.pie — [Structure] Heavy Cannon Fortress',
+      name: 'stwpfcan.pie — [Structure] Cannon Fortress',
       filename: 'stwpfcan.pie',
       category: 'Struct_Mod',
       dir: 'warzone2100/Struct_Mod',
@@ -227,11 +253,11 @@ function getAvailableModels(): ModelInfo[] {
       pointCount: 38,
       pieVersion: 2,
       default: 'true',
-      inGameName: 'Heavy Cannon Fortress',
+      inGameName: 'Cannon Fortress',
       inGameType: 'Structure',
-      relatedItem: 'Heavy Cannon Fortress',
+      relatedItem: 'Cannon Fortress',
       relatedType: 'Structure',
-      relatedItems: [{ name: 'Heavy Cannon Fortress', type: 'Structure', id: 'stwpfcan', role: 'Main Model' }]
+      relatedItems: [{ name: 'Cannon Fortress', type: 'Structure', id: 'stwpfcan', role: 'Main Model' }]
     });
   }
 
@@ -268,9 +294,7 @@ function getAvailableModels(): ModelInfo[] {
         relatedItems: p.relatedItems || []
       });
     }
-    return models;
-  }
-
+  } else {
   // Fallback: Scan DATA_DIR for local .pie files if catalog is missing
   function scan(dir: string, base: string) {
     if (!fs.existsSync(dir)) return;
@@ -309,6 +333,50 @@ function getAvailableModels(): ModelInfo[] {
   }
 
   scan(DATA_DIR, '');
+  }
+
+  // Always include user models from data/custom (synced catalog never covers them)
+  const seenPaths = new Set(models.map(m => (m.piePath || (m as any).path || '').toLowerCase()));
+  const scanCustom = (dir: string, base: string) => {
+    if (!fs.existsSync(dir)) return;
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const rel = path.join(base, ent.name).replace(/\\/g, '/');
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        scanCustom(full, rel);
+      } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.pie')) {
+        if (seenPaths.has(rel.toLowerCase())) continue;
+        seenPaths.add(rel.toLowerCase());
+        let defaultTexture = 'page-12-player-buildings.png';
+        try {
+          for (const line of fs.readFileSync(full, 'utf8').split(/\r?\n/, 40)) {
+            const tr = line.trim().split(/\s+/);
+            if (tr[0].toUpperCase() === 'TEXTURE' && tr[2]) {
+              defaultTexture = tr[2];
+              break;
+            }
+          }
+        } catch { /* keep default texture */ }
+        const stem = path.parse(ent.name).name;
+        models.push({
+          id: stem,
+          name: `${ent.name} (Custom)`,
+          filename: ent.name,
+          category: 'Custom',
+          dir: base,
+          piePath: rel,
+          path: rel,
+          textures: [{ tileset: 0, filename: defaultTexture, width: 256, height: 256 }],
+          defaultTexture,
+          polyCount: 0,
+          pointCount: 0,
+          pieVersion: 2,
+          default: 'false'
+        });
+      }
+    }
+  };
+  scanCustom(path.join(DATA_DIR, 'custom'), 'custom');
   return models;
 }
 
@@ -590,6 +658,25 @@ async function syncWithGitHubRepo(): Promise<{ success: boolean; newPies: number
       }
     }
 
+    // 3. Refresh MP assembly stats snapshots (data/mp/stats JSON files)
+    try {
+      const mpStatsDir = path.join(DATA_DIR, 'stats', 'mp');
+      ensureDir(mpStatsDir);
+      for (const f of MP_STATS_FILES) {
+        try {
+          const r = await fetch(`https://raw.githubusercontent.com/Warzone2100/warzone2100/master/data/mp/stats/${f}`, {
+            headers: { 'User-Agent': 'Warzone2100-PIE-Studio' }
+          });
+          if (r.ok) {
+            fs.writeFileSync(path.join(mpStatsDir, f), await r.text(), 'utf8');
+          }
+        } catch (e: any) {
+          console.warn(`[Sync] Could not refresh MP stats ${f}:`, e.message);
+        }
+      }
+      mpStatsCache = null;
+    } catch { /* non-fatal */ }
+
     lastSyncedAt = new Date().toISOString();
     catalogCache = catalog;
     fs.writeFileSync(path.join(DATA_DIR, 'wz2100_catalog.json'), JSON.stringify(catalog, null, 2), 'utf8');
@@ -628,6 +715,8 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+app.use(express.json({ limit: '5mb' }));
+
 // API: List Available Models
 app.get('/api/models', (_req: Request, res: Response) => {
   const list = getAvailableModels();
@@ -661,6 +750,73 @@ app.post('/api/sync', async (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.json({ ...result, lastSynced: lastSyncedAt });
 });
+
+// API: List MP assembly stats files (data/mp/stats JSON viewer)
+app.get('/api/assembly/mpstats', (_req: Request, res: Response) => {
+  const files = MP_STATS_FILES.map(f => {
+    const recs = loadMpStatsFile(f);
+    const entries = Object.keys(recs).filter(k => !k.startsWith('_')).length;
+    return { file: f, entries };
+  });
+  // Plus user JSON configs under data/custom (same shapes, local overrides)
+  try {
+    const customDir = path.join(DATA_DIR, 'custom');
+    if (fs.existsSync(customDir)) {
+      for (const ent of fs.readdirSync(customDir)) {
+        const full = path.join(customDir, ent);
+        if (!ent.startsWith('.') && ent.toLowerCase().endsWith('.json') && fs.statSync(full).isFile()) {
+          let entries = 0;
+          try {
+            const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+            if (parsed && typeof parsed === 'object') {
+              entries = Object.keys(parsed).filter(k => !k.startsWith('_')).length;
+            }
+          } catch { /* count stays 0 */ }
+          files.push({ file: 'custom/' + ent, entries });
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.json({ files });
+});
+
+// API: Get one MP assembly stats file (full JSON, allowlisted)
+app.get('/api/assembly/mpstats/:file', (req: Request, res: Response) => {
+  const file = req.params.file as string;
+  if (!MP_STATS_FILES.includes(file)) {
+    res.status(404).json({ error: `Unknown stats file: ${file}` });
+    return;
+  }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.json(loadMpStatsFile(file));
+});
+
+// API: Get one user JSON config from data/custom (top level, .json only)
+app.get('/api/assembly/mpstats/custom/:name', (req: Request, res: Response) => {
+  const name = req.params.name as string;
+  if (!/^[A-Za-z0-9_.-]+\.json$/i.test(name)) {
+    res.status(404).json({ error: `Unknown stats file: ${name}` });
+    return;
+  }
+  try {
+    const full = path.join(DATA_DIR, 'custom', name);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+      res.status(404).json({ error: `Custom stats file not found: ${name}` });
+      return;
+    }
+    const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      res.status(400).json({ error: `${name} is not a JSON object` });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json(parsed);
+  } catch (err: any) {
+    res.status(400).json({ error: `Could not parse ${name}: ` + (err.message || err) });
+  }
+});
+
 
 // API: Get PIE Model File
 app.get('/api/pie', async (req: Request, res: Response) => {
@@ -758,6 +914,192 @@ app.get('/api/texture', async (req: Request, res: Response) => {
 
 // Static files from /static
 app.use(express.static(STATIC_DIR));
+
+// Dedicated Assembly Studio page
+app.get('/assemble', (_req: Request, res: Response) => {
+  res.sendFile(path.join(STATIC_DIR, 'assemble.html'));
+});
+
+// Dedicated File Manager page
+app.get('/files', (_req: Request, res: Response) => {
+  res.sendFile(path.join(STATIC_DIR, 'files.html'));
+});
+
+// ---- File Manager API (browse/view everywhere under data/, mutate data/custom only) ----
+const CUSTOM_DIR = path.join(DATA_DIR, 'custom');
+const FM_EXTS = new Set(['.pie', '.json']);
+
+// Resolve a user-supplied relative path inside DATA_DIR (null = traversal attempt)
+function fmResolve(rel: string): string | null {
+  const normalized = path.normalize(rel || '').replace(/^(\.\.[\/\\])+/, '');
+  const full = path.resolve(DATA_DIR, normalized);
+  if (full !== DATA_DIR && !full.startsWith(DATA_DIR + path.sep)) return null;
+  return full;
+}
+
+function fmRel(full: string): string {
+  return path.relative(DATA_DIR, full).replace(/\\/g, '/');
+}
+
+function fmIsCustom(full: string): boolean {
+  return full === CUSTOM_DIR || full.startsWith(CUSTOM_DIR + path.sep);
+}
+
+// Browse: dirs + .pie/.json files (read-only view of the whole tree)
+app.get('/api/files/browse', (req: Request, res: Response) => {
+  const full = fmResolve((req.query.path as string) || '');
+  if (!full) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  if (!fs.existsSync(full) || !fs.statSync(full).isDirectory()) {
+    res.status(404).json({ error: 'Directory not found' });
+    return;
+  }
+  try {
+    const dirs: Array<{ name: string; path: string }> = [];
+    const files: Array<{ name: string; path: string; size: number; mtime: string }> = [];
+    for (const ent of fs.readdirSync(full, { withFileTypes: true })) {
+      if (ent.name.startsWith('.')) continue;
+      const ef = path.join(full, ent.name);
+      if (ent.isDirectory()) {
+        dirs.push({ name: ent.name, path: fmRel(ef) });
+      } else if (ent.isFile() && FM_EXTS.has(path.extname(ent.name).toLowerCase())) {
+        const st = fs.statSync(ef);
+        files.push({ name: ent.name, path: fmRel(ef), size: st.size, mtime: st.mtime.toISOString() });
+      }
+    }
+    dirs.sort((a, b) => a.name.localeCompare(b.name));
+    files.sort((a, b) => a.name.localeCompare(b.name));
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({ path: fmRel(full), writable: fmIsCustom(full), dirs, files });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Browse failed' });
+  }
+});
+
+// View file content (PIE/JSON, 2 MB cap)
+app.get('/api/files/view', (req: Request, res: Response) => {
+  const full = fmResolve((req.query.path as string) || '');
+  if (!full) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  try {
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+      res.status(404).json({ error: 'File not found' });
+      return;
+    }
+    if (!FM_EXTS.has(path.extname(full).toLowerCase())) {
+      res.status(400).json({ error: 'Only .pie and .json files can be viewed' });
+      return;
+    }
+    const st = fs.statSync(full);
+    if (st.size > 2 * 1024 * 1024) {
+      res.status(400).json({ error: 'File too large to view' });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({ path: fmRel(full), writable: fmIsCustom(full), size: st.size, content: fs.readFileSync(full, 'utf8') });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Read failed' });
+  }
+});
+
+// Save (create/overwrite) a .pie/.json file under data/custom only
+app.post('/api/files/save', (req: Request, res: Response) => {
+  const { path: rel, content, overwrite } = req.body || {};
+  const full = fmResolve(typeof rel === 'string' ? rel : '');
+  if (!full) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  if (!fmIsCustom(full)) {
+    res.status(403).json({ error: 'Only files under data/custom can be saved' });
+    return;
+  }
+  if (!FM_EXTS.has(path.extname(full).toLowerCase())) {
+    res.status(400).json({ error: 'Only .pie and .json files can be saved' });
+    return;
+  }
+  if (typeof content !== 'string' || content.length > 5 * 1024 * 1024) {
+    res.status(400).json({ error: 'Missing or oversized content' });
+    return;
+  }
+  try {
+    if (fs.existsSync(full) && !overwrite) {
+      res.status(409).json({ error: 'File exists (pass overwrite:true to replace)' });
+      return;
+    }
+    ensureDir(path.dirname(full));
+    fs.writeFileSync(full, content, 'utf8');
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({ ok: true, path: fmRel(full) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Save failed' });
+  }
+});
+
+// Make a directory under data/custom only
+app.post('/api/files/mkdir', (req: Request, res: Response) => {
+  const { path: rel } = req.body || {};
+  const full = fmResolve(typeof rel === 'string' ? rel : '');
+  if (!full) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  if (!fmIsCustom(full) || full === CUSTOM_DIR) {
+    res.status(403).json({ error: 'Directories can only be created under data/custom' });
+    return;
+  }
+  try {
+    ensureDir(full);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({ ok: true, path: fmRel(full) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'mkdir failed' });
+  }
+});
+
+// Delete a file (or directory tree with recursive:true) under data/custom only
+app.delete('/api/files', (req: Request, res: Response) => {
+  const rel = (req.query.path as string) || '';
+  const recursive = (req.query.recursive as string) === 'true';
+  const full = fmResolve(rel);
+  if (!full) {
+    res.status(400).json({ error: 'Invalid path' });
+    return;
+  }
+  if (!fmIsCustom(full) || full === CUSTOM_DIR) {
+    res.status(403).json({ error: 'Only files under data/custom can be deleted' });
+    return;
+  }
+  try {
+    if (!fs.existsSync(full)) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    const st = fs.statSync(full);
+    if (st.isDirectory()) {
+      if (!recursive) {
+        const entries = fs.readdirSync(full);
+        if (entries.length > 0) {
+          res.status(400).json({ error: 'Directory not empty (pass recursive:true)' });
+          return;
+        }
+        fs.rmdirSync(full);
+      } else {
+        fs.rmSync(full, { recursive: true, force: true });
+      }
+    } else {
+      fs.unlinkSync(full);
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json({ ok: true, path: fmRel(full) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Delete failed' });
+  }
+});
 
 // Fallback to static/index.html
 app.get('*', (_req: Request, res: Response) => {

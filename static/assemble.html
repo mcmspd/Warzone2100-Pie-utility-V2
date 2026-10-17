@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warzone 2100 Assembly Studio</title>
+  <meta name="description" content="Browse Warzone 2100 MP stats JSON files and assemble their PIE models the way the game engine does.">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Local Three.js and OrbitControls -->
+  <script src="libs/three.min.js"></script>
+  <script src="libs/OrbitControls.js"></script>
+</head>
+<body>
+  <div id="asm-page">
+    <header id="asm-header">
+      <div class="brand">
+        <div class="brand-icon">WZ</div>
+        <nav class="page-tabs" aria-label="Pages">
+          <a href="/" class="page-tab" title="PIE 3D Engine & Inspector">Inspector</a>
+          <a href="/assemble" class="page-tab active" title="Assembly Studio: browse stats and assemble PIEs engine-fashion">Assemble</a>
+          <a href="/files" class="page-tab" title="File Manager: view, save and delete PIE and JSON files">Files</a>
+        </nav>
+      </div>
+      <span id="asm-stats" class="asm-header-stats">Pick a stats file and entry, then press Assemble</span>
+      <div class="header-controls">
+        <button id="btn-asm-fit" class="btn btn-sm" title="Fit camera to current assembly">Fit</button>
+        <button id="btn-asm-clear-top" class="btn btn-sm" title="Remove current assembly">Clear</button>
+      </div>
+    </header>
+
+    <div id="asm-main">
+      <aside id="asm-side">
+        <div class="asm-side-section">
+          <div class="asm-section-title">Stats file</div>
+          <select id="asm-file-select" class="ts-select asm-file-select" title="Stats JSON file to browse"></select>
+        </div>
+        <div class="asm-side-section asm-entries-section">
+          <div class="asm-section-title">Entries</div>
+          <input type="text" id="asm-entry-filter" class="ts-input asm-entry-filter" placeholder="Filter entries by name…" autocomplete="off" title="Filter entries by name or id">
+          <div id="asm-entries" class="asm-results"></div>
+        </div>
+        <div id="asm-detail" class="asm-side-section" style="display:none;">
+          <div class="asm-detail-head">
+            <span id="asm-detail-name" class="asm-active-label">No entry selected</span>
+          </div>
+          <pre id="asm-json" class="asm-json" title="Raw stats JSON for the selected entry"></pre>
+          <div id="asm-detail-pies" class="asm-pie-chips"></div>
+        </div>
+      </aside>
+
+      <section id="asm-viewport-wrap">
+        <div id="asm-viewport"></div>
+        <div id="assembly-step" class="asm-viewport-hint">Pick a stats file and entry to view it assembled</div>
+      </section>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast">Ready</div>
+  </div>
+
+  <script src="pie_parser.js"></script>
+  <script src="assemble.js"></script>
+</body>
+</html>

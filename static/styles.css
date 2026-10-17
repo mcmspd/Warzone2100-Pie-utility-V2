@@ -76,14 +76,36 @@ header#app-header {
   color: #000;
 }
 
-.brand-title {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: #fff;
+.page-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.page-tab {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  padding: 4px 12px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.page-tab:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.page-tab.active {
+  color: #fff;
+  background-color: var(--accent-cyan-dark, #0369a1);
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.4);
 }
 
 .brand-badge {
@@ -1680,6 +1702,406 @@ select.tileset-select:hover, select.tileset-select:focus {
 
 .ts-select:focus, .ts-select:hover {
   border-color: #a855f7;
+}
+
+.asm-file-select {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  font-size: 12px;
+}
+
+.asm-file-select:focus, .asm-file-select:hover {
+  border-color: #2dd4bf;
+}
+
+.asm-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.asm-json {
+  background: #0b0d10;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #9fb3c8;
+  overflow: auto;
+  max-height: 180px;
+  white-space: pre;
+  margin: 0;
+}
+
+.asm-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.asm-entry-row:hover {
+  border-color: #2dd4bf;
+}
+
+.asm-entry-row.asm-selected {
+  border-color: #2dd4bf;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.4);
+}
+
+.asm-entry-id {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.asm-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  max-height: 220px;
+}
+
+.asm-pie-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.asm-pie-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.asm-pie-found {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.4);
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.asm-pie-missing {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.asm-active-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #2dd4bf;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asm-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.asm-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Assembly Studio dedicated page (/assemble) */
+#asm-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+#asm-header {
+  height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+#asm-header .header-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#asm-header .header-controls a.btn {
+  text-decoration: none;
+}
+
+.asm-header-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#asm-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#asm-side {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+}
+
+.asm-side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.asm-entries-section {
+  min-height: 120px;
+}
+
+.asm-entry-filter {
+  width: 100%;
+  height: 28px;
+  font-size: 12px;
+}
+
+.asm-entry-filter:focus, .asm-entry-filter:hover {
+  border-color: #2dd4bf;
+}
+
+#asm-viewport-wrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+  background-color: #0b0d10;
+}
+
+#asm-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+#asm-viewport canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.asm-viewport-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: rgba(18, 20, 24, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 10;
+}
+
+/* File Manager dedicated page (/files) */
+#fm-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+#fm-header {
+  min-height: 48px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+#fm-header .header-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+#fm-header .header-controls a.btn {
+  text-decoration: none;
+}
+
+.fm-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.fm-crumb {
+  background: none;
+  border: none;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.fm-crumb:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.fm-crumb-sep {
+  color: var(--text-muted);
+}
+
+#fm-main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#fm-side {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  overflow-y: auto;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+}
+
+.fm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fm-files {
+  margin-top: 2px;
+}
+
+#fm-edit-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 12px;
+  gap: 8px;
+  background-color: #0b0d10;
+}
+
+.fm-info {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fm-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fm-name-row .ts-row-label {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.fm-filename {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  font-size: 12px;
+}
+
+.fm-editor {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  background-color: #0f1115;
+  color: #d1d5db;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  outline: none;
+  white-space: pre;
+  overflow: auto;
+}
+
+.fm-editor:focus {
+  border-color: var(--accent-cyan);
+}
+
+.fm-editor.fm-readonly {
+  color: var(--text-muted);
+}
+
+#fm-main.fm-dragover #fm-edit-wrap {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -6px;
+  background-color: rgba(56, 189, 248, 0.06);
 }
 
 .grid-size-select {

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warzone 2100 File Manager</title>
+  <meta name="description" content="Browse, view, save and delete PIE and JSON files on the utility server.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="fm-page">
+    <header id="fm-header">
+      <div class="brand">
+        <div class="brand-icon">WZ</div>
+        <nav class="page-tabs" aria-label="Pages">
+          <a href="/" class="page-tab" title="PIE 3D Engine & Inspector">Inspector</a>
+          <a href="/assemble" class="page-tab" title="Assembly Studio: browse stats and assemble PIEs engine-fashion">Assemble</a>
+          <a href="/files" class="page-tab active" title="File Manager: view, save and delete PIE and JSON files">Files</a>
+        </nav>
+      </div>
+      <nav id="fm-crumbs" class="fm-crumbs" title="Current directory"></nav>
+      <div class="header-controls">
+        <button id="btn-fm-new" class="btn btn-sm" title="New empty file in the current directory (custom only)">New file</button>
+        <button id="btn-fm-mkdir" class="btn btn-sm" title="New folder in the current directory (custom only)">New folder</button>
+        <button id="btn-fm-save" class="btn btn-sm btn-primary" title="Save editor content to server (custom only)">Save</button>
+        <button id="btn-fm-save-copy" class="btn btn-sm" style="display:none;" title="Save a copy of this read-only file under data/custom">Save copy to /custom</button>
+        <button id="btn-fm-delete" class="btn btn-sm" title="Delete the open file or current folder (custom only)">Delete</button>
+        <button id="btn-fm-refresh" class="btn btn-sm" title="Refresh listing">Refresh</button>
+      </div>
+    </header>
+
+    <div id="fm-main">
+      <aside id="fm-side">
+        <div class="asm-section-title">Folders</div>
+        <div id="fm-dirs" class="fm-list"></div>
+        <div class="asm-section-title">PIE / JSON files</div>
+        <div id="fm-files" class="fm-list fm-files"></div>
+      </aside>
+
+      <section id="fm-edit-wrap">
+        <div id="fm-info" class="fm-info">Pick a file to view it</div>
+        <div id="fm-name-row" class="fm-name-row" style="display:none;">
+          <span class="ts-row-label">File</span>
+          <input type="text" id="fm-filename" class="ts-input fm-filename" placeholder="custom/untitled.pie" autocomplete="off" spellcheck="false" title="Save path, relative to data/ (writes only allowed under custom/)">
+        </div>
+        <textarea id="fm-editor" class="fm-editor" spellcheck="false" placeholder="File content… (or drag & drop .pie / .json files anywhere to upload)"></textarea>
+      </section>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast">Ready</div>
+  </div>
+
+  <script src="files.js"></script>
+</body>
+</html>

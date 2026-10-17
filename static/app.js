@@ -314,6 +314,7 @@ function initDOMElements() {
   el.btnSelectAllTransform = document.getElementById('btn-select-all-transform');
   el.btnClearTransform = document.getElementById('btn-clear-transform');
   el.btnExitTransform = document.getElementById('btn-exit-transform');
+
   el.createPointStep = document.getElementById('create-point-step');
   el.chipPointCoords = document.getElementById('chip-point-coords');
   el.chipPointSnap = document.getElementById('chip-point-snap');
@@ -3213,6 +3214,10 @@ function applyTransformCreatePoints() {
   }
 }
 
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /**
  * Scan all polygons in current PIE model and fix any inverted winding (swapping 2nd/3rd vertex & UVs)
  * to ensure outward-facing normals for game engine back-face culling.
@@ -5628,7 +5633,7 @@ function updateModelInGameBadge(filename, piePath) {
     (m.path && m.path.toLowerCase().endsWith(cleanFilename))
   );
 
-  const relatedName = (found && (found.relatedItem || found.inGameName)) || (cleanFilename === 'stwpfcan.pie' ? 'Heavy Cannon Fortress' : '');
+  const relatedName = (found && (found.relatedItem || found.inGameName)) || (cleanFilename === 'stwpfcan.pie' ? 'Cannon Fortress' : '');
   const relatedType = (found && (found.relatedType || found.inGameType)) || (cleanFilename === 'stwpfcan.pie' ? 'Structure' : '');
 
   const typeClass = relatedType ? `tag-${relatedType.toLowerCase().split(' ')[0]}` : '';
