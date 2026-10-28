@@ -421,19 +421,22 @@ async function findTextureBuffer(texName: string, pieRel?: string): Promise<Buff
     }
   }
 
-  // 4. Try fetching from data-texpages repository on GitHub
-  try {
-    const url = `https://raw.githubusercontent.com/Warzone2100/data-texpages/master/${cleanName}`;
-    const res = await fetch(url);
-    if (res.ok) {
-      const arrBuf = await res.arrayBuffer();
-      const buf = Buffer.from(arrBuf);
-      ensureDir(texDir);
-      fs.writeFileSync(path.join(texDir, cleanName), buf);
-      return buf;
+  // 4. Try fetching from data-texpages repository on GitHub.
+  // cleanName is basename'd above and must stay a plain .png filename.
+  if (/^[A-Za-z0-9_.\-]+\.png$/i.test(cleanName)) {
+    try {
+      const url = `https://raw.githubusercontent.com/Warzone2100/data-texpages/master/${cleanName}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const arrBuf = await res.arrayBuffer();
+        const buf = Buffer.from(arrBuf);
+        ensureDir(texDir);
+        fs.writeFileSync(path.join(texDir, cleanName), buf);
+        return buf;
+      }
+    } catch (err: any) {
+      console.warn('Could not fetch remote texture:', cleanName, err.message);
     }
-  } catch (err: any) {
-    console.warn(`Could not fetch remote texture ${cleanName}:`, err.message);
   }
 
   // 5. Default fallback: generate buildings texture if requesting page-12
@@ -882,7 +885,10 @@ app.get('/api/pie', async (req: Request, res: Response) => {
     }
   }
 
-  // 4. Fetch live from GitHub repository (Warzone2100/warzone2100)
+  // 4. Fetch live from GitHub repository (Warzone2100/warzone2100).
+  // normalizedRel is fmResolve-contained and .pie-only; still, keep the
+  // remote path to plain relative segments (no escapes, no scheme).
+  if (!/(^|\/)\.\.(\/|$)/.test(normalizedRel) && /^[A-Za-z0-9_.\-\/]+\.pie$/i.test(normalizedRel)) {
   try {
     const remoteUrl = `https://raw.githubusercontent.com/Warzone2100/warzone2100/master/${normalizedRel}`;
     const remoteRes = await fetch(remoteUrl);
@@ -895,10 +901,13 @@ app.get('/api/pie', async (req: Request, res: Response) => {
       return;
     }
   } catch (err: any) {
-    console.warn(`Could not fetch remote PIE ${normalizedRel}:`, err.message);
+    console.warn('Could not fetch remote PIE:', normalizedRel, err.message);
+  }
   }
 
-  res.status(404).send(`File not found: ${pieRel}`);
+  res.status(404);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.send(`File not found: ${pieRel}`);
 });
 
 // API: Get Texture File
@@ -908,7 +917,9 @@ app.get('/api/texture', async (req: Request, res: Response) => {
 
   const buf = await findTextureBuffer(texName, pieRel);
   if (!buf) {
-    res.status(404).send(`Texture '${texName}' not found`);
+    res.status(404);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send(`Texture '${texName}' not found`);
     return;
   }
 
