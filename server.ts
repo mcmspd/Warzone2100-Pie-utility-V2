@@ -826,9 +826,14 @@ app.get('/api/pie', async (req: Request, res: Response) => {
     return;
   }
 
-  // Sanitize path to prevent directory traversal
-  const normalizedRel = path.normalize(pieRel).replace(/^(\.\.[\/\\])+/, '');
-  let fullPath = path.join(DATA_DIR, normalizedRel);
+  // Containment + type check via the shared resolver (defense in depth:
+  // only .pie files under DATA_DIR are servable here)
+  const fullPath = fmResolve(pieRel);
+  if (!fullPath || path.extname(fullPath).toLowerCase() !== '.pie') {
+    res.status(400).send('Invalid path: only .pie files under data/ can be served');
+    return;
+  }
+  const normalizedRel = fmRel(fullPath);
 
   // 1. Direct path in DATA_DIR
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {

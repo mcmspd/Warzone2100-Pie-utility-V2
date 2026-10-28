@@ -2324,10 +2324,12 @@ function formatPolyLineTokens(str, poly) {
 }
 
 function escapeHtml(text) {
-  return text
+  return String(text == null ? '' : text)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /**
@@ -3212,10 +3214,6 @@ function applyTransformCreatePoints() {
     console.error('Error re-parsing PIE model after transform:', err);
     showToast('Error creating transformed points.');
   }
-}
-
-function escHtml(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /**
@@ -5015,14 +5013,18 @@ function populateModelDropdown(models, filterQuery = '') {
 }
 
 /**
- * Helper to highlight matched query substring
+ * Helper to highlight matched query substring.
+ * Escapes HTML first so untrusted catalog/filename text can never inject
+ * markup; highlighting is applied to the escaped text.
  */
 function highlightMatch(text, query) {
-  if (!text || !query) return text || '';
-  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (!escaped) return text;
-  const regex = new RegExp(`(${escaped.split(/\s+/).join('|')})`, 'gi');
-  return text.replace(regex, '<mark class="search-highlight">$1</mark>');
+  const safe = escapeHtml(text || '');
+  if (!query) return safe;
+  const terms = query.trim().split(/\s+/).filter(Boolean)
+    .map(t => escapeHtml(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return safe;
+  const regex = new RegExp(`(${terms.join('|')})`, 'gi');
+  return safe.replace(regex, '<mark class="search-highlight">$1</mark>');
 }
 
 let activeSuggestionIndex = -1;
@@ -5089,18 +5091,18 @@ function renderSearchSuggestions(filterQuery = '') {
 
     const relatedName = m.relatedItem || m.inGameName || m.name || m.filename;
     const relatedType = m.relatedType || m.inGameType || 'Component';
-    const typeClass = relatedType ? `tag-${relatedType.toLowerCase().split(' ')[0]}` : '';
+    const typeClass = relatedType ? `tag-${String(relatedType).toLowerCase().split(' ')[0].replace(/[^a-z0-9_-]/g, '')}` : '';
 
     item.innerHTML = `
       <div class="suggestion-left">
         <div class="suggestion-name-row">
-          <span class="in-game-item-tag ${typeClass}" style="font-size: 10px; padding: 1px 6px;">[${relatedType}]</span>
+          <span class="in-game-item-tag ${typeClass}" style="font-size: 10px; padding: 1px 6px;">[${escapeHtml(relatedType)}]</span>
           <span class="suggestion-name">${highlightMatch(relatedName, filterQuery)}</span>
         </div>
         <span class="suggestion-file">${highlightMatch(m.filename, filterQuery)}</span>
       </div>
       <div class="suggestion-right">
-        <span class="suggestion-cat">${m.category}</span>
+        <span class="suggestion-cat">${escapeHtml(m.category)}</span>
         ${m.polyCount ? `<span class="suggestion-polys">${m.polyCount} polys</span>` : ''}
       </div>
     `;
@@ -5273,18 +5275,18 @@ function renderRefSearchSuggestions(filterQuery = '') {
 
     const relatedName = m.relatedItem || m.inGameName || m.name || m.filename;
     const relatedType = m.relatedType || m.inGameType || 'Component';
-    const typeClass = relatedType ? `tag-${relatedType.toLowerCase().split(' ')[0]}` : '';
+    const typeClass = relatedType ? `tag-${String(relatedType).toLowerCase().split(' ')[0].replace(/[^a-z0-9_-]/g, '')}` : '';
 
     item.innerHTML = `
       <div class="suggestion-left">
         <div class="suggestion-name-row">
-          <span class="in-game-item-tag ${typeClass}" style="font-size: 10px; padding: 1px 6px;">[${relatedType}]</span>
+          <span class="in-game-item-tag ${typeClass}" style="font-size: 10px; padding: 1px 6px;">[${escapeHtml(relatedType)}]</span>
           <span class="suggestion-name">${highlightMatch(relatedName, filterQuery)}</span>
         </div>
         <span class="suggestion-file">${highlightMatch(m.filename, filterQuery)}</span>
       </div>
       <div class="suggestion-right">
-        <span class="suggestion-cat">${m.category}</span>
+        <span class="suggestion-cat">${escapeHtml(m.category)}</span>
         ${m.polyCount ? `<span class="suggestion-polys">${m.polyCount} polys</span>` : ''}
       </div>
     `;
